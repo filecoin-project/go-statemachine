@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	logging.SetLogLevel("*", "INFO")
+	logging.SetLogLevel("*", "INFO") // nolint: errcheck
 }
 
 type testHandler struct {
@@ -48,7 +48,7 @@ func (t *testHandler) plan(events []Event, state *TestState) (func(Context, Test
 }
 
 func (t *testHandler) step0(ctx Context, st TestState) error {
-	ctx.Send(&TestEvent{A: "b", Val: 55})
+	ctx.Send(&TestEvent{A: "b", Val: 55}) // nolint: errcheck
 	<-t.proceed
 	return nil
 }

@@ -1,0 +1,158 @@
+version: 2.1
+orbs:
+  go: gotest/tools@0.0.9
+
+executors:
+  golang:
+    docker:
+      - image: circleci/golang:1.13
+    resource_class: medium
+
+commands:
+  install-deps:
+    steps:
+      - go/install-ssh
+      - go/install: {package: git}
+  prepare:
+    parameters:
+      linux:
+        default: true
+        description: is a linux build environment?
+        type: boolean
+      darwin:
+        default: false
+        description: is a darwin build environment?
+        type: boolean
+    steps:
+      - checkout
+      - when:
+          condition: << parameters.linux >>
+          steps:
+            - run: sudo apt-get update
+            - run: sudo apt-get install ocl-icd-opencl-dev
+      - run: git submodule sync
+      - run: git submodule update --init
+
+jobs:
+  mod-tidy-check:
+    executor: golang
+    steps:
+      - install-deps
+      - prepare
+      - go/mod-download
+      - go/mod-tidy-check
+
+  build-all:
+    executor: golang
+    steps:
+      - install-deps
+      - prepare
+      - go/mod-download
+      - restore_cache:
+          name: restore go mod cache
+          key: v1-go-deps-{{ arch }}-{{ checksum "/home/circleci/project/go.mod" }}
+      - run:
+          command: make build
+
+  test: &test
+    description: |
+      Run tests.
+    parameters:
+      executor:
+        type: executor
+        default: golang
+    executor: << parameters.executor >>
+    steps:
+      - install-deps
+      - prepare
+      - go/mod-download
+      - restore_cache:
+          name: restore go mod cache
+          key: v1-go-deps-{{ arch }}-{{ checksum "/home/circleci/project/go.mod" }}
+      - run:
+          command: make deps
+      - run:
+          name: run tests
+          command: make test
+      - save_cache:
+          name: save go mod cache
+          key: v1-go-deps-{{ arch }}-{{ checksum "/home/circleci/project/go.mod" }}
+          paths:
+            - "~/go/pkg"
+            - "~/go/src/github.com"
+            - "~/go/src/golang.org"
+
+  build-macos:
+    description: build with Darwin
+    macos:
+      xcode: "10.0.0"
+    working_directory: ~/go/src/github.com/filecoin-project/go-storage-miner
+    steps:
+      - prepare:
+          linux: false
+          darwin: true
+      - run:
+          name: Install go
+          command: |
+            curl -O https://dl.google.com/go/go1.13.4.darwin-amd64.pkg && \
+            sudo installer -pkg go1.13.4.darwin-amd64.pkg -target /
+      - run:
+          name: Install pkg-config
+          command: HOMEBREW_NO_AUTO_UPDATE=1 brew install pkg-config
+      - run: go version
+      - run:
+          name: Install Rust
+          command: |
+            curl https://sh.rustup.rs -sSf | sh -s -- -y
+      - run:
+          name: Install jq
+          command: |
+            curl --location https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64 --output /usr/local/bin/jq
+            chmod +x /usr/local/bin/jq
+      - restore_cache:
+          name: restore go mod and cargo cache
+          key: v1-go-deps-{{ arch }}-{{ checksum "~/go/src/github.com/filecoin-project/go-storage-miner/go.sum" }}
+      - install-deps
+      - go/mod-download
+      - run:
+          command: make
+      - save_cache:
+          name: save cargo cache
+          key: v1-go-deps-{{ arch }}-{{ checksum "~/go/src/github.com/filecoin-project/go-storage-miner/go.sum" }}
+          paths:
+            - "~/.rustup"
+            - "~/.cargo"
+
+  lint:
+    description: |
+      Run golangci-lint.
+    parameters:
+      executor:
+        type: executor
+        default: golang
+      golangci-lint-version:
+        type: string
+        default: 1.17.1
+    executor: << parameters.executor >>
+    steps:
+      - install-deps
+      - prepare
+      - go/mod-download
+      - run:
+          command: make
+      - go/install-golangci-lint:
+          gobin: $HOME/.local/bin
+          version: << parameters.golangci-lint-version >>
+      - run:
+          name: Lint
+          command: make lint
+
+workflows:
+  version: 2.1
+  ci:
+    jobs:
+      - lint
+      - test
+      - mod-tidy-check
+      - build-all
+      - build-macos
