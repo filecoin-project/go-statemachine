@@ -16,10 +16,12 @@ type Event struct {
 	User interface{}
 }
 
-// TODO: This probably should be returning an int indicating partial event processing
-//  (or something like errPartial(nEvents))
-// returns func(ctx Context, st <T>) (func(*<T>), error), where <T> is the typeOf(User) param
-type Planner func(events []Event, user interface{}) (interface{}, error)
+// Planner processes in queue events
+// It returns:
+// 1. a handler of type -- func(ctx Context, st <T>) (func(*<T>), error), where <T> is the typeOf(User) param
+// 2. the number of events processed
+// 3. an error if occured
+type Planner func(events []Event, user interface{}) (interface{}, uint64, error)
 
 type StateMachine struct {
 	planner  Planner
@@ -59,9 +61,10 @@ func (fsm *StateMachine) run() {
 		if atomic.CompareAndSwapInt32(&fsm.busy, 0, 1) {
 			var nextStep interface{}
 			var ustate interface{}
+			var processed uint64
 
 			err := fsm.mutateUser(func(user interface{}) (err error) {
-				nextStep, err = fsm.planner(pendingEvents, user)
+				nextStep, processed, err = fsm.planner(pendingEvents, user)
 				ustate = user
 				return err
 			})
@@ -70,8 +73,11 @@ func (fsm *StateMachine) run() {
 				return
 			}
 
-			pendingEvents = nil
-
+			if processed < uint64(len(pendingEvents)) {
+				pendingEvents = pendingEvents[processed:]
+			} else {
+				pendingEvents = nil
+			}
 			if nextStep == nil {
 				continue
 			}
