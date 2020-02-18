@@ -63,6 +63,8 @@ type EventDesc struct {
 
 	// Dst is the destination state that the FSM will be in if the transition
 	// succeds.
+	// A nil value means the state does not change (but the state handler will
+	// get called again)
 	Dst StateKey
 
 	// ApplyTransition is a function to make additional modifications to state

@@ -44,6 +44,11 @@ var events = []fsm.EventDesc{
 			return nil
 		},
 	},
+	{
+		Name: "resume",
+		Dst:  nil,
+		Src:  []fsm.StateKey{uint64(1), uint64(2)},
+	},
 }
 
 var stateHandlers = fsm.StateHandlers{
@@ -278,4 +283,23 @@ func TestUniversalHandler(t *testing.T) {
 	<-tw.done
 
 	require.Equal(t, tw.universalCalls, uint64(2))
+}
+
+func TestNoChangeHandler(t *testing.T) {
+	ds := datastore.NewMapDatastore()
+
+	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
+	close(tw.proceed)
+	smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+	require.NoError(t, err)
+
+	err = smm.Send(uint64(2), "start")
+	require.NoError(t, err)
+	<-tw.done
+
+	tw.done = make(chan struct{})
+	// call resume to retrigger step2
+	err = smm.Send(uint64(2), "resume")
+	require.NoError(t, err)
+	<-tw.done
 }
