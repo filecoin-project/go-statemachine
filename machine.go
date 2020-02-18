@@ -79,6 +79,7 @@ func (fsm *StateMachine) run() {
 				pendingEvents = nil
 			}
 			if nextStep == nil {
+				atomic.StoreInt32(&fsm.busy, 0)
 				continue
 			}
 

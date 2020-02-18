@@ -234,5 +234,72 @@ func (t *testHandlerPartial) step2(ctx Context, st TestState) error {
 	return nil
 }
 
+func TestNoStateCallback(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	ds := datastore.NewMapDatastore()
+
+	th := &testHandlerNoStateCB{t: t, done: make(chan struct{})}
+	smm := New(ds, th, TestState{})
+
+	if err := smm.Send(uint64(2), &TestEvent{A: "start"}); err != nil {
+		t.Fatalf("%+v", err)
+	}
+
+	if err := smm.Send(uint64(2), &TestEvent{A: "b", Val: 55}); err != nil {
+		t.Fatalf("%+v", err)
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Second event transition not processed")
+	case <-th.done:
+	}
+}
+
+type testHandlerNoStateCB struct {
+	t    *testing.T
+	done chan struct{}
+}
+
+func (t *testHandlerNoStateCB) Plan(events []Event, state interface{}) (interface{}, uint64, error) {
+	cb, processed, err := t.plan(events, state.(*TestState))
+	if cb == nil {
+		return nil, processed, err
+	}
+	return cb, processed, err
+}
+
+func (t *testHandlerNoStateCB) plan(events []Event, state *TestState) (func(Context, TestState) error, uint64, error) {
+	e := events[0].User.(*TestEvent)
+	switch e.A {
+	case "restart":
+	case "start":
+		state.A = 1
+	case "b":
+		state.A = 2
+		state.B = e.Val
+	}
+
+	switch state.A {
+	case 1:
+		return nil, uint64(1), nil
+	case 2:
+		return t.step1, uint64(1), nil
+	default:
+		t.t.Fatal(state.A)
+	}
+	panic("how?")
+}
+
+func (t *testHandlerNoStateCB) step1(ctx Context, st TestState) error {
+	assert.Equal(t.t, uint64(2), st.A)
+
+	close(t.done)
+	return nil
+}
+
 var _ StateHandler = &testHandler{}
 var _ StateHandler = &testHandlerPartial{}
+var _ StateHandler = &testHandlerNoStateCB{}
