@@ -18,9 +18,10 @@ func init() {
 }
 
 type testWorld struct {
-	t       *testing.T
-	proceed chan struct{}
-	done    chan struct{}
+	universalCalls uint64
+	t              *testing.T
+	proceed        chan struct{}
+	done           chan struct{}
 }
 
 var events = []fsm.EventDesc{
@@ -46,6 +47,10 @@ var events = []fsm.EventDesc{
 }
 
 var stateHandlers = fsm.StateHandlers{
+	nil: func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
+		tw.universalCalls++
+		return nil
+	},
 	uint64(1): func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
 		err := ctx.Event("b", uint64(55))
 		assert.NilError(tw.t, err)
@@ -166,6 +171,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "handler for state does not match expected type")
 	})
 }
+
 func TestArgumentChecks(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 
@@ -200,6 +206,8 @@ func TestBasic(t *testing.T) {
 		err = smm.Send(uint64(2), "start")
 		require.NoError(t, err)
 
+		<-tw.done
+
 	}
 }
 
@@ -228,4 +236,46 @@ func TestPersist(t *testing.T) {
 
 		<-tw.done
 	}
+}
+
+func TestSyncEventHandling(t *testing.T) {
+	ctx := context.Background()
+	ds := datastore.NewMapDatastore()
+
+	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+	smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+	close(tw.proceed)
+	require.NoError(t, err)
+
+	// events that should fail based on state, only picked up with SendSync
+
+	err = smm.Send(uint64(2), "b", uint64(55))
+	require.NoError(t, err)
+
+	err = smm.SendSync(ctx, uint64(2), "b", uint64(55))
+	require.Error(t, err)
+	require.EqualError(t, err, "Invalid transition in queue, state `0`, event `b`")
+
+	err = smm.Send(uint64(2), "restart")
+	require.NoError(t, err)
+
+	err = smm.SendSync(ctx, uint64(2), "restart")
+	require.Error(t, err)
+	require.EqualError(t, err, "Invalid transition in queue, state `0`, event `restart`")
+
+}
+
+func TestUniversalHandler(t *testing.T) {
+	ds := datastore.NewMapDatastore()
+
+	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
+	close(tw.proceed)
+	smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+	require.NoError(t, err)
+
+	err = smm.Send(uint64(2), "start")
+	require.NoError(t, err)
+	<-tw.done
+
+	require.Equal(t, tw.universalCalls, uint64(2))
 }

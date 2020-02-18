@@ -83,6 +83,7 @@ type World interface{}
 type StateHandler interface{}
 
 // StateHandlers is a map between states and their handlers
+// StateKey = nil is a special value that means call this on every function
 type StateHandlers map[StateKey]StateHandler
 
 // Group is a manager of a group of states that follows finite state machine logic
@@ -92,6 +93,11 @@ type Group interface {
 	// it will error if there are underlying state store errors or if the parameters
 	// do not match what is expected for the event name
 	Send(id interface{}, name EventName, args ...interface{}) (err error)
+
+	// SendSync will block until the given event is actually processed, and
+	// will return an error if the transition was not possible given the current
+	// state
+	SendSync(ctx context.Context, id interface{}, name EventName, args ...interface{}) (err error)
 
 	// Get gets state for a single state machine
 	Get(id interface{}) *statestore.StoredState

@@ -5,8 +5,11 @@ import (
 	"reflect"
 
 	"github.com/filecoin-project/go-statemachine"
+	logging "github.com/ipfs/go-log"
 	"golang.org/x/xerrors"
 )
+
+var log = logging.Logger("fsm")
 
 type fsmHandler struct {
 	stateType          reflect.Type
@@ -15,6 +18,7 @@ type fsmHandler struct {
 	transitions        map[eKey]eventDestination
 	stateHandlers      StateHandlers
 	world              World
+	handler            interface{}
 }
 
 // NewFSMHandler defines an StateHandler for go-statemachine that implements
@@ -67,7 +71,7 @@ func NewFSMHandler(world World, state StateType, stateField StateKeyField, event
 
 	// type check state handlers
 	for state, stateHandler := range stateHandlers {
-		if !reflect.TypeOf(state).AssignableTo(stateFieldType.Type) {
+		if state != nil && !reflect.TypeOf(state).AssignableTo(stateFieldType.Type) {
 			return nil, xerrors.Errorf("state key is not assignable to: %s", stateFieldType.Type.Name())
 		}
 		expectedHandlerType := reflect.FuncOf([]reflect.Type{reflect.TypeOf((*Context)(nil)).Elem(), worldType, d.stateType}, []reflect.Type{reflect.TypeOf(new(error)).Elem()}, false)
@@ -78,7 +82,22 @@ func NewFSMHandler(world World, state StateType, stateField StateKeyField, event
 		d.stateHandlers[state] = stateHandler
 	}
 
+	d.handler = d.makeHandler()
 	return d, nil
+}
+
+func (d fsmHandler) completePlan(event fsmEvent, handler interface{}, processed uint64, err error) (interface{}, uint64, error) {
+	if event.returnChannel != nil {
+		select {
+		case <-event.ctx.Done():
+		case event.returnChannel <- err:
+		}
+	}
+	// we drop the error so from the state machine's point of view this event is processed
+	if err != nil {
+		log.Errorf("Executing event planner failed: %+v", err)
+	}
+	return handler, processed, nil
 }
 
 // Plan executes events according to finite state machine logic
@@ -86,27 +105,22 @@ func NewFSMHandler(world World, state StateType, stateField StateKeyField, event
 // then applies the transition, updating the keyed state in the process
 // At the end it executes the specified handler for the final state,
 // if specified
-func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interface{}, error) {
+func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interface{}, uint64, error) {
 	userValue := reflect.ValueOf(user)
 	currentState := userValue.Elem().FieldByName(string(d.stateField)).Interface()
-	for _, event := range events {
-		e := event.User.(fsmEvent)
-		destination, ok := d.transitions[eKey{e.name, currentState}]
-		if !ok {
-			return nil, xerrors.Errorf("Invalid event in queue, state `%s`, event `%s`", currentState, event)
-		}
-		err := d.applyTransition(userValue, e, destination)
-		if err != nil {
-			return nil, err
-		}
-
-		userValue.Elem().FieldByName(string(d.stateField)).Set(reflect.ValueOf(destination.dst))
-		currentState = userValue.Elem().FieldByName(string(d.stateField)).Interface()
+	e := events[0].User.(fsmEvent)
+	destination, ok := d.transitions[eKey{e.name, currentState}]
+	if !ok {
+		return d.completePlan(e, nil, 1, xerrors.Errorf("Invalid transition in queue, state `%+v`, event `%s`", currentState, e.name))
+	}
+	err := d.applyTransition(userValue, e, destination)
+	if err != nil {
+		return d.completePlan(e, nil, 1, err)
 	}
 
-	internalHandler := d.stateHandlers[currentState]
+	userValue.Elem().FieldByName(string(d.stateField)).Set(reflect.ValueOf(destination.dst))
 
-	return d.handler(internalHandler), nil
+	return d.completePlan(e, d.handler, 1, nil)
 }
 
 func (d fsmHandler) applyTransition(userValue reflect.Value, e fsmEvent, destination eventDestination) error {
@@ -125,23 +139,41 @@ func (d fsmHandler) applyTransition(userValue reflect.Value, e fsmEvent, destina
 	}
 	return nil
 }
-func (d fsmHandler) handler(cb interface{}) interface{} {
+
+func (d fsmHandler) makeHandler() interface{} {
 	handlerType := reflect.FuncOf([]reflect.Type{reflect.TypeOf(statemachine.Context{}), d.stateType}, []reflect.Type{reflect.TypeOf(new(error)).Elem()}, false)
 
-	if cb == nil {
-		return reflect.MakeFunc(handlerType, func(args []reflect.Value) (results []reflect.Value) {
-			return []reflect.Value{reflect.ValueOf(error(nil))}
-		}).Interface()
-	}
-	return reflect.MakeFunc(handlerType, func(args []reflect.Value) (results []reflect.Value) {
+	call := func(cb interface{}, args []reflect.Value) []reflect.Value {
 		ctx := args[0].Interface().(statemachine.Context)
 		state := args[1].Interface()
 		dContext := fsmContext{state, ctx, d}
 		return reflect.ValueOf(cb).Call([]reflect.Value{reflect.ValueOf(dContext), reflect.ValueOf(d.world), args[1]})
+	}
+
+	baseHandler := reflect.MakeFunc(handlerType, func(args []reflect.Value) []reflect.Value {
+		currentState := args[1].FieldByName(string(d.stateField)).Interface()
+		cb := d.stateHandlers[currentState]
+		if cb == nil {
+			return []reflect.Value{reflect.ValueOf(error(nil))}
+		}
+		return call(cb, args)
+	})
+
+	universalHandler := d.stateHandlers[nil]
+	if universalHandler == nil {
+		return baseHandler.Interface()
+	}
+
+	return reflect.MakeFunc(handlerType, func(args []reflect.Value) []reflect.Value {
+		results := call(universalHandler, args)
+		if results[0].Interface() != nil {
+			return results
+		}
+		return baseHandler.Call(args)
 	}).Interface()
 }
 
-func (d fsmHandler) event(event EventName, args ...interface{}) (fsmEvent, error) {
+func (d fsmHandler) event(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (fsmEvent, error) {
 	destination, ok := d.transitionsByEvent[event]
 	if !ok {
 		return fsmEvent{}, xerrors.Errorf("Unknown event `%s`", event)
@@ -154,7 +186,7 @@ func (d fsmHandler) event(event EventName, args ...interface{}) (fsmEvent, error
 			return fsmEvent{}, xerrors.Errorf("Incorrect argument type at index `%d` for event `%s`", i, event)
 		}
 	}
-	return fsmEvent{event, args}, nil
+	return fsmEvent{event, args, ctx, returnChannel}, nil
 }
 
 // eKey is a struct key used for storing the transition map.
@@ -183,7 +215,7 @@ func (dc fsmContext) Context() context.Context {
 }
 
 func (dc fsmContext) Event(event EventName, args ...interface{}) error {
-	evt, err := dc.d.event(event, args...)
+	evt, err := dc.d.event(dc.ctx.Context(), event, nil, args...)
 	if err != nil {
 		return err
 	}
@@ -193,8 +225,10 @@ func (dc fsmContext) Event(event EventName, args ...interface{}) error {
 var _ Context = fsmContext{}
 
 type fsmEvent struct {
-	name EventName
-	args []interface{}
+	name          EventName
+	args          []interface{}
+	ctx           context.Context
+	returnChannel chan error
 }
 
 func inspectApplyTransitionFunc(e EventDesc, stateType reflect.Type) ([]reflect.Type, error) {
