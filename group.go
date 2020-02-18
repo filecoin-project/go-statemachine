@@ -12,7 +12,7 @@ import (
 
 type StateHandler interface {
 	// returns
-	Plan(events []Event, user interface{}) (interface{}, error)
+	Plan(events []Event, user interface{}) (interface{}, uint64, error)
 }
 
 // StateGroup manages a group of state machines sharing the same logic
