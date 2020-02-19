@@ -80,19 +80,21 @@ var stateHandlers = fsm.StateHandlers{
 func TestTypeCheckingOnSetup(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-
+	twb := func(id fsm.Identifier) *testWorld {
+		return tw
+	}
 	t.Run("Bad state field", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "Jesus", events, stateHandlers)
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "Jesus", events, stateHandlers)
 		require.Nil(t, smm)
 		require.EqualError(t, err, "state type has no field `Jesus`")
 	})
 	t.Run("State field not comparable", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "C", events, stateHandlers)
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "C", events, stateHandlers)
 		require.Nil(t, smm)
 		require.EqualError(t, err, "state field `C` is not comparable")
 	})
 	t.Run("Event description has bad source type", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
 			"start": {
 				TransitionMap: fsm.TransitionMap{
 					"happy": uint64(1),
@@ -103,7 +105,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `start` source type is not assignable to: uint64")
 	})
 	t.Run("Event description has bad destination type", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
 			"start": {
 				TransitionMap: fsm.TransitionMap{
 					uint64(1): "happy",
@@ -114,7 +116,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `start` destination type is not assignable to: uint64")
 	})
 	t.Run("Event description has callback that is not a function", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
 			"b": {
 				TransitionMap: fsm.TransitionMap{
 					uint64(1): uint64(2),
@@ -126,7 +128,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` has a callback that is not a function")
 	})
 	t.Run("Event description has callback with no parameters", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
 			"b": {
 				TransitionMap: fsm.TransitionMap{
 					uint64(1): uint64(2),
@@ -138,7 +140,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
 	})
 	t.Run("Event description has callback with wrong first parameter", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
 			"b": {
 				TransitionMap: fsm.TransitionMap{
 					uint64(1): uint64(2),
@@ -150,7 +152,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
 	})
 	t.Run("Event description has callback that doesn't return an error", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
 			"b": {
 				TransitionMap: fsm.TransitionMap{
 					uint64(1): uint64(2),
@@ -162,7 +164,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` callback should return exactly one param that is an error")
 	})
 	t.Run("State Handler with bad stateKey", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, fsm.StateHandlers{
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, fsm.StateHandlers{
 			"apples": func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
 				err := ctx.Event("b", uint64(55))
 				assert.NilError(tw.t, err)
@@ -174,7 +176,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "state key is not assignable to: uint64")
 	})
 	t.Run("State Handler with bad statehandler", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, fsm.StateHandlers{
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, fsm.StateHandlers{
 			uint64(1): func(ctx fsm.Context, tw *testWorld, u uint64) error {
 				return nil
 			},
@@ -186,9 +188,11 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 
 func TestArgumentChecks(t *testing.T) {
 	ds := datastore.NewMapDatastore()
-
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-	smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+	twb := func(id fsm.Identifier) *testWorld {
+		return tw
+	}
+	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
 	close(tw.proceed)
 	require.NoError(t, err)
 
@@ -212,7 +216,10 @@ func TestBasic(t *testing.T) {
 
 		tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 		close(tw.proceed)
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+		twb := func(id fsm.Identifier) *testWorld {
+			return tw
+		}
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
 		require.NoError(t, err)
 
 		err = smm.Send(uint64(2), "start")
@@ -228,7 +235,10 @@ func TestPersist(t *testing.T) {
 		ds := datastore.NewMapDatastore()
 
 		tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+		twb := func(id fsm.Identifier) *testWorld {
+			return tw
+		}
+		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
 		require.NoError(t, err)
 
 		err = smm.Send(uint64(2), "start")
@@ -239,7 +249,7 @@ func TestPersist(t *testing.T) {
 			return
 		}
 
-		smm, err = fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+		smm, err = fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
 		require.NoError(t, err)
 		err = smm.Send(uint64(2), "restart")
 		require.NoError(t, err)
@@ -255,7 +265,10 @@ func TestSyncEventHandling(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-	smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+	twb := func(id fsm.Identifier) *testWorld {
+		return tw
+	}
+	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
 	close(tw.proceed)
 	require.NoError(t, err)
 
@@ -282,7 +295,10 @@ func TestUniversalHandler(t *testing.T) {
 
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(tw.proceed)
-	smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+	twb := func(id fsm.Identifier) *testWorld {
+		return tw
+	}
+	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
 	require.NoError(t, err)
 
 	err = smm.Send(uint64(2), "start")
@@ -297,7 +313,10 @@ func TestNoChangeHandler(t *testing.T) {
 
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(tw.proceed)
-	smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+	twb := func(id fsm.Identifier) *testWorld {
+		return tw
+	}
+	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
 	require.NoError(t, err)
 
 	err = smm.Send(uint64(2), "start")
@@ -316,7 +335,10 @@ func TestAllStateEvent(t *testing.T) {
 
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(tw.proceed)
-	smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+	twb := func(id fsm.Identifier) *testWorld {
+		return tw
+	}
+	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
 	require.NoError(t, err)
 
 	// any can run from any state and function like start

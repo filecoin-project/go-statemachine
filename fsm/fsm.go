@@ -17,7 +17,7 @@ type fsmHandler struct {
 	callbacks     map[EventName]callback
 	transitions   map[eKey]StateKey
 	stateHandlers StateHandlers
-	world         World
+	worldBuilder  WorldBuilder
 	handler       interface{}
 }
 
@@ -40,8 +40,22 @@ type fsmHandler struct {
 // - stateHandlers - functions that will get called each time the machine enters a particular
 // state. this is a map of state key -> handler. A special state key of nil will get called
 // when entering every new state (useful for logging)
-func NewFSMHandler(world World, state StateType, stateKeyField StateKeyField, events Events, stateHandlers StateHandlers) (statemachine.StateHandler, error) {
-	worldType := reflect.TypeOf(world)
+func NewFSMHandler(worldBuilder WorldBuilder, state StateType, stateKeyField StateKeyField, events Events, stateHandlers StateHandlers) (statemachine.StateHandler, error) {
+	worldBuilderType := reflect.TypeOf(worldBuilder)
+
+	if worldBuilderType.Kind() != reflect.Func {
+		return nil, xerrors.New("world builder is not a function")
+	}
+	if worldBuilderType.NumIn() != 1 {
+		return nil, xerrors.Errorf("world builder must take a parameter")
+	}
+	if !reflect.TypeOf((*interface{})(nil)).Elem().AssignableTo(worldBuilderType.In(0)) {
+		return nil, xerrors.Errorf("world builder must take an empty interface parameter")
+	}
+	if worldBuilderType.NumOut() != 1 {
+		return nil, xerrors.Errorf("world builder have exactly 1 return")
+	}
+	worldType := worldBuilderType.Out(0)
 	stateType := reflect.TypeOf(state)
 	stateFieldType, ok := stateType.FieldByName(string(stateKeyField))
 	if !ok {
@@ -52,7 +66,7 @@ func NewFSMHandler(world World, state StateType, stateKeyField StateKeyField, ev
 	}
 
 	d := fsmHandler{
-		world:         world,
+		worldBuilder:  worldBuilder,
 		stateType:     stateType,
 		stateKeyField: stateKeyField,
 		callbacks:     make(map[EventName]callback),
@@ -183,7 +197,8 @@ func (d fsmHandler) makeHandler() interface{} {
 		ctx := args[0].Interface().(statemachine.Context)
 		state := args[1].Interface()
 		dContext := fsmContext{state, ctx, d}
-		return reflect.ValueOf(cb).Call([]reflect.Value{reflect.ValueOf(dContext), reflect.ValueOf(d.world), args[1]})
+		world := reflect.ValueOf(d.worldBuilder).Call([]reflect.Value{reflect.ValueOf(ctx.Name())})[0]
+		return reflect.ValueOf(cb).Call([]reflect.Value{reflect.ValueOf(dContext), world, args[1]})
 	}
 
 	baseHandler := reflect.MakeFunc(handlerType, func(args []reflect.Value) []reflect.Value {
@@ -247,10 +262,6 @@ type fsmContext struct {
 
 func (dc fsmContext) Context() context.Context {
 	return dc.ctx.Context()
-}
-
-func (dc fsmContext) Identifier() Identifier {
-	return dc.ctx.Name()
 }
 
 func (dc fsmContext) Event(event EventName, args ...interface{}) error {

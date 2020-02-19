@@ -24,9 +24,9 @@ type stateGroup struct {
 // events: list of events that can be dispatched to the statemachine
 // stateHandlers: callbacks that are called upon entering a particular state
 // after processing events
-func New(ds datastore.Datastore, world World, stateType StateType,
+func New(ds datastore.Datastore, worldBuilder WorldBuilder, stateType StateType,
 	stateField StateKeyField, events Events, stateHandlers StateHandlers) (Group, error) {
-	handler, err := NewFSMHandler(world, stateType, stateField, events, stateHandlers)
+	handler, err := NewFSMHandler(worldBuilder, stateType, stateField, events, stateHandlers)
 	if err != nil {
 		return nil, err
 	}

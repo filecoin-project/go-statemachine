@@ -17,9 +17,6 @@ type Context interface {
 	// Context returns the golang context for this context
 	Context() context.Context
 
-	// Identifier returns a unique identifier for this instance of a the state machine
-	Identifier() Identifier
-
 	// Event initiates a state transition with the named event.
 	//
 	// The call takes a variable number of arguments that will be passed to the
@@ -80,9 +77,11 @@ type Events map[EventName]EventDesc
 // StateType is a type for a state, represented by an empty concrete value for a state
 type StateType interface{}
 
-// World is just a connection to any external dependencies needed in handling states
-// It can be anything -- and your state handlers can receive it in its native type
-type World interface{}
+// WorldBuilder is a function that takes a state identifier
+// and returns a connection to any
+// dependencies that will be needed by this particular state machine
+// The return type of the funtion is the concrete type accepted by the state handler
+type WorldBuilder interface{}
 
 // StateHandler is called upon entering a state after
 // all events are processed. It should have the signature
