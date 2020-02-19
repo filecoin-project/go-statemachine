@@ -47,6 +47,7 @@ type StateKeyField string
 // is designated the state key and must be comparable
 type StateKey interface{}
 
+// TransitionMap is a map from src state to destination state
 type TransitionMap map[StateKey]StateKey
 
 // EventDesc describes what happens when an event is triggered

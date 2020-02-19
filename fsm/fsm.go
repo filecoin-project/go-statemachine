@@ -78,11 +78,13 @@ func NewFSMHandler(world World, state StateType, stateKeyField StateKeyField, ev
 			if dst != nil {
 				d.stateHandlers[dst] = nil
 			}
-			if !reflect.TypeOf(src).AssignableTo(stateFieldType.Type) {
+			if src != nil && !reflect.TypeOf(src).AssignableTo(stateFieldType.Type) {
 				return nil, xerrors.Errorf("event `%s` source type is not assignable to: %s", name, stateFieldType.Type.Name())
 			}
 			d.transitions[eKey{name, src}] = dst
-			d.stateHandlers[src] = nil
+			if src != nil {
+				d.stateHandlers[src] = nil
+			}
 		}
 	}
 
@@ -131,6 +133,10 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 	currentState := userValue.Elem().FieldByName(string(d.stateKeyField)).Interface()
 	e := events[0].User.(fsmEvent)
 	destination, ok := d.transitions[eKey{e.name, currentState}]
+	// check for fallback transition for any source state
+	if !ok {
+		destination, ok = d.transitions[eKey{e.name, nil}]
+	}
 	if !ok {
 		return d.completePlan(e, nil, 1, xerrors.Errorf("Invalid transition in queue, state `%+v`, event `%s`", currentState, e.name))
 	}

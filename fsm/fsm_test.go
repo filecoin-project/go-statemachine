@@ -51,6 +51,11 @@ var events = fsm.Events{
 			uint64(2): nil,
 		},
 	},
+	"any": {
+		TransitionMap: fsm.TransitionMap{
+			nil: uint64(1),
+		},
+	},
 }
 
 var stateHandlers = fsm.StateHandlers{
@@ -302,6 +307,26 @@ func TestNoChangeHandler(t *testing.T) {
 	tw.done = make(chan struct{})
 	// call resume to retrigger step2
 	err = smm.Send(uint64(2), "resume")
+	require.NoError(t, err)
+	<-tw.done
+}
+
+func TestAllStateEvent(t *testing.T) {
+	ds := datastore.NewMapDatastore()
+
+	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
+	close(tw.proceed)
+	smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", events, stateHandlers)
+	require.NoError(t, err)
+
+	// any can run from any state and function like start
+	err = smm.Send(uint64(2), "any")
+	require.NoError(t, err)
+	<-tw.done
+
+	tw.done = make(chan struct{})
+	// here any can function like a restart handler
+	err = smm.Send(uint64(2), "any")
 	require.NoError(t, err)
 	<-tw.done
 }
