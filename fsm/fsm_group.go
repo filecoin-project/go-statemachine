@@ -25,7 +25,7 @@ type stateGroup struct {
 // stateHandlers: callbacks that are called upon entering a particular state
 // after processing events
 func New(ds datastore.Datastore, world World, stateType StateType,
-	stateField StateKeyField, events []EventDesc, stateHandlers StateHandlers) (Group, error) {
+	stateField StateKeyField, events Events, stateHandlers StateHandlers) (Group, error) {
 	handler, err := NewFSMHandler(world, stateType, stateField, events, stateHandlers)
 	if err != nil {
 		return nil, err

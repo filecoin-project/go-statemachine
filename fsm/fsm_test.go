@@ -24,30 +24,32 @@ type testWorld struct {
 	done           chan struct{}
 }
 
-var events = []fsm.EventDesc{
-	{
-		Name: "start",
-		Dst:  uint64(1),
-		Src:  []fsm.StateKey{uint64(0)},
+var events = fsm.Events{
+	"start": {
+		TransitionMap: fsm.TransitionMap{
+			uint64(0): uint64(1),
+		},
 	},
-	{
-		Name: "restart",
-		Dst:  uint64(1),
-		Src:  []fsm.StateKey{uint64(1), uint64(2)},
+	"restart": {
+		TransitionMap: fsm.TransitionMap{
+			uint64(1): uint64(1),
+			uint64(2): uint64(1),
+		},
 	},
-	{
-		Name: "b",
-		Dst:  uint64(2),
-		Src:  []fsm.StateKey{uint64(1)},
+	"b": {
+		TransitionMap: fsm.TransitionMap{
+			uint64(1): uint64(2),
+		},
 		ApplyTransition: func(state *statemachine.TestState, val uint64) error {
 			state.B = val
 			return nil
 		},
 	},
-	{
-		Name: "resume",
-		Dst:  nil,
-		Src:  []fsm.StateKey{uint64(1), uint64(2)},
+	"resume": {
+		TransitionMap: fsm.TransitionMap{
+			uint64(1): nil,
+			uint64(2): nil,
+		},
 	},
 }
 
@@ -85,33 +87,33 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "state field `C` is not comparable")
 	})
 	t.Run("Event description has bad source type", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", []fsm.EventDesc{
-			{
-				Name: "start",
-				Dst:  uint64(1),
-				Src:  []fsm.StateKey{"happy"},
+		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+			"start": {
+				TransitionMap: fsm.TransitionMap{
+					"happy": uint64(1),
+				},
 			},
 		}, stateHandlers)
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `start` source type is not assignable to: uint64")
 	})
 	t.Run("Event description has bad destination type", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", []fsm.EventDesc{
-			{
-				Name: "start",
-				Dst:  "happy",
-				Src:  []fsm.StateKey{uint64(0)},
+		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+			"start": {
+				TransitionMap: fsm.TransitionMap{
+					uint64(1): "happy",
+				},
 			},
 		}, stateHandlers)
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `start` destination type is not assignable to: uint64")
 	})
 	t.Run("Event description has callback that is not a function", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", []fsm.EventDesc{
-			{
-				Name:            "b",
-				Dst:             uint64(2),
-				Src:             []fsm.StateKey{uint64(1)},
+		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+			"b": {
+				TransitionMap: fsm.TransitionMap{
+					uint64(1): uint64(2),
+				},
 				ApplyTransition: "applesuace",
 			},
 		}, stateHandlers)
@@ -119,11 +121,11 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` has a callback that is not a function")
 	})
 	t.Run("Event description has callback with no parameters", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", []fsm.EventDesc{
-			{
-				Name:            "b",
-				Dst:             uint64(2),
-				Src:             []fsm.StateKey{uint64(1)},
+		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+			"b": {
+				TransitionMap: fsm.TransitionMap{
+					uint64(1): uint64(2),
+				},
 				ApplyTransition: func() {},
 			},
 		}, stateHandlers)
@@ -131,11 +133,11 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
 	})
 	t.Run("Event description has callback with wrong first parameter", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", []fsm.EventDesc{
-			{
-				Name:            "b",
-				Dst:             uint64(2),
-				Src:             []fsm.StateKey{uint64(1)},
+		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+			"b": {
+				TransitionMap: fsm.TransitionMap{
+					uint64(1): uint64(2),
+				},
 				ApplyTransition: func(uint64) error { return nil },
 			},
 		}, stateHandlers)
@@ -143,11 +145,11 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
 	})
 	t.Run("Event description has callback that doesn't return an error", func(t *testing.T) {
-		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", []fsm.EventDesc{
-			{
-				Name:            "b",
-				Dst:             uint64(2),
-				Src:             []fsm.StateKey{uint64(1)},
+		smm, err := fsm.New(ds, tw, statemachine.TestState{}, "A", fsm.Events{
+			"b": {
+				TransitionMap: fsm.TransitionMap{
+					uint64(1): uint64(2),
+				},
 				ApplyTransition: func(*statemachine.TestState) {},
 			},
 		}, stateHandlers)

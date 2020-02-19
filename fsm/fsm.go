@@ -12,13 +12,13 @@ import (
 var log = logging.Logger("fsm")
 
 type fsmHandler struct {
-	stateType          reflect.Type
-	stateKeyField      StateKeyField
-	transitionsByEvent map[EventName]eventDestination
-	transitions        map[eKey]eventDestination
-	stateHandlers      StateHandlers
-	world              World
-	handler            interface{}
+	stateType     reflect.Type
+	stateKeyField StateKeyField
+	callbacks     map[EventName]callback
+	transitions   map[eKey]StateKey
+	stateHandlers StateHandlers
+	world         World
+	handler       interface{}
 }
 
 // NewFSMHandler defines an StateHandler for go-statemachine that implements
@@ -40,7 +40,7 @@ type fsmHandler struct {
 // - stateHandlers - functions that will get called each time the machine enters a particular
 // state. this is a map of state key -> handler. A special state key of nil will get called
 // when entering every new state (useful for logging)
-func NewFSMHandler(world World, state StateType, stateKeyField StateKeyField, events []EventDesc, stateHandlers StateHandlers) (statemachine.StateHandler, error) {
+func NewFSMHandler(world World, state StateType, stateKeyField StateKeyField, events Events, stateHandlers StateHandlers) (statemachine.StateHandler, error) {
 	worldType := reflect.TypeOf(world)
 	stateType := reflect.TypeOf(state)
 	stateFieldType, ok := stateType.FieldByName(string(stateKeyField))
@@ -52,37 +52,36 @@ func NewFSMHandler(world World, state StateType, stateKeyField StateKeyField, ev
 	}
 
 	d := fsmHandler{
-		world:              world,
-		stateType:          stateType,
-		stateKeyField:      stateKeyField,
-		transitionsByEvent: make(map[EventName]eventDestination),
-		transitions:        make(map[eKey]eventDestination),
-		stateHandlers:      make(StateHandlers),
+		world:         world,
+		stateType:     stateType,
+		stateKeyField: stateKeyField,
+		callbacks:     make(map[EventName]callback),
+		transitions:   make(map[eKey]StateKey),
+		stateHandlers: make(StateHandlers),
 	}
 
 	// Build transition map and store sets of all events and states.
-	for _, e := range events {
-		if e.Dst != nil && !reflect.TypeOf(e.Dst).AssignableTo(stateFieldType.Type) {
-			return nil, xerrors.Errorf("event `%s` destination type is not assignable to: %s", e.Name, stateFieldType.Type.Name())
-		}
-		argumentTypes, err := inspectApplyTransitionFunc(e, stateType)
+	for name, desc := range events {
+		argumentTypes, err := inspectApplyTransitionFunc(name, desc, stateType)
 		if err != nil {
 			return nil, err
 		}
-		destination := eventDestination{
-			dst:             e.Dst,
+		d.callbacks[name] = callback{
 			argumentTypes:   argumentTypes,
-			applyTransition: e.ApplyTransition,
+			applyTransition: desc.ApplyTransition,
 		}
-		if e.Dst != nil {
-			d.stateHandlers[e.Dst] = nil
-		}
-		d.transitionsByEvent[e.Name] = destination
-		for _, src := range e.Src {
-			if !reflect.TypeOf(src).AssignableTo(stateFieldType.Type) {
-				return nil, xerrors.Errorf("event `%s` source type is not assignable to: %s", e.Name, stateFieldType.Type.Name())
+		for src, dst := range desc.TransitionMap {
+
+			if dst != nil && !reflect.TypeOf(dst).AssignableTo(stateFieldType.Type) {
+				return nil, xerrors.Errorf("event `%s` destination type is not assignable to: %s", name, stateFieldType.Type.Name())
 			}
-			d.transitions[eKey{e.Name, src}] = destination
+			if dst != nil {
+				d.stateHandlers[dst] = nil
+			}
+			if !reflect.TypeOf(src).AssignableTo(stateFieldType.Type) {
+				return nil, xerrors.Errorf("event `%s` source type is not assignable to: %s", name, stateFieldType.Type.Name())
+			}
+			d.transitions[eKey{name, src}] = dst
 			d.stateHandlers[src] = nil
 		}
 	}
@@ -135,20 +134,21 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 	if !ok {
 		return d.completePlan(e, nil, 1, xerrors.Errorf("Invalid transition in queue, state `%+v`, event `%s`", currentState, e.name))
 	}
-	err := d.applyTransition(userValue, e, destination)
+	cb := d.callbacks[e.name]
+	err := d.applyTransition(userValue, e, cb)
 	if err != nil {
 		return d.completePlan(e, nil, 1, err)
 	}
 
-	if destination.dst != nil {
-		userValue.Elem().FieldByName(string(d.stateKeyField)).Set(reflect.ValueOf(destination.dst))
+	if destination != nil {
+		userValue.Elem().FieldByName(string(d.stateKeyField)).Set(reflect.ValueOf(destination))
 	}
 
 	return d.completePlan(e, d.handler, 1, nil)
 }
 
-func (d fsmHandler) applyTransition(userValue reflect.Value, e fsmEvent, destination eventDestination) error {
-	if destination.applyTransition == nil {
+func (d fsmHandler) applyTransition(userValue reflect.Value, e fsmEvent, cb callback) error {
+	if cb.applyTransition == nil {
 		return nil
 	}
 	values := make([]reflect.Value, 0, len(e.args)+1)
@@ -156,7 +156,7 @@ func (d fsmHandler) applyTransition(userValue reflect.Value, e fsmEvent, destina
 	for _, arg := range e.args {
 		values = append(values, reflect.ValueOf(arg))
 	}
-	res := reflect.ValueOf(destination.applyTransition).Call(values)
+	res := reflect.ValueOf(cb.applyTransition).Call(values)
 
 	if res[0].Interface() != nil {
 		return xerrors.Errorf("Error applying event transition `%s`: %w", e.name, res[0].Interface().(error))
@@ -204,15 +204,15 @@ func (d fsmHandler) makeHandler() interface{} {
 }
 
 func (d fsmHandler) event(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (fsmEvent, error) {
-	destination, ok := d.transitionsByEvent[event]
+	cb, ok := d.callbacks[event]
 	if !ok {
 		return fsmEvent{}, xerrors.Errorf("Unknown event `%s`", event)
 	}
-	if len(args) != len(destination.argumentTypes) {
+	if len(args) != len(cb.argumentTypes) {
 		return fsmEvent{}, xerrors.Errorf("Wrong number of arguments for event `%s`", event)
 	}
 	for i, arg := range args {
-		if !reflect.TypeOf(arg).AssignableTo(destination.argumentTypes[i]) {
+		if !reflect.TypeOf(arg).AssignableTo(cb.argumentTypes[i]) {
 			return fsmEvent{}, xerrors.Errorf("Incorrect argument type at index `%d` for event `%s`", i, event)
 		}
 	}
@@ -228,8 +228,7 @@ type eKey struct {
 	src interface{}
 }
 
-type eventDestination struct {
-	dst             interface{}
+type callback struct {
 	argumentTypes   []reflect.Type
 	applyTransition interface{}
 }
@@ -261,23 +260,23 @@ type fsmEvent struct {
 	returnChannel chan error
 }
 
-func inspectApplyTransitionFunc(e EventDesc, stateType reflect.Type) ([]reflect.Type, error) {
+func inspectApplyTransitionFunc(name EventName, e EventDesc, stateType reflect.Type) ([]reflect.Type, error) {
 	if e.ApplyTransition == nil {
 		return nil, nil
 	}
 
 	atType := reflect.TypeOf(e.ApplyTransition)
 	if atType.Kind() != reflect.Func {
-		return nil, xerrors.Errorf("event `%s` has a callback that is not a function", e.Name)
+		return nil, xerrors.Errorf("event `%s` has a callback that is not a function", name)
 	}
 	if atType.NumIn() < 1 {
-		return nil, xerrors.Errorf("event `%s` has a callback that does not take the state", e.Name)
+		return nil, xerrors.Errorf("event `%s` has a callback that does not take the state", name)
 	}
 	if !reflect.PtrTo(stateType).AssignableTo(atType.In(0)) {
-		return nil, xerrors.Errorf("event `%s` has a callback that does not take the state", e.Name)
+		return nil, xerrors.Errorf("event `%s` has a callback that does not take the state", name)
 	}
 	if atType.NumOut() != 1 || atType.Out(0).AssignableTo(reflect.TypeOf(new(error))) {
-		return nil, xerrors.Errorf("event `%s` callback should return exactly one param that is an error", e.Name)
+		return nil, xerrors.Errorf("event `%s` callback should return exactly one param that is an error", name)
 	}
 	argumentTypes := make([]reflect.Type, atType.NumIn()-1)
 	for i := range argumentTypes {

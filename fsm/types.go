@@ -47,30 +47,28 @@ type StateKeyField string
 // is designated the state key and must be comparable
 type StateKey interface{}
 
-// EventDesc represents an event when initializing the FSM.
+type TransitionMap map[StateKey]StateKey
+
+// EventDesc describes what happens when an event is triggered
 //
-// The event can have one or more source states that is valid for performing
-// the transition. If the FSM is in one of the source states it will end up in
-// the specified destination state. It will apply the specified transition function
+// The event description contains a map of eligible source states
+// to destination states
+// It also contains the specified transition function
 // to make additional modifications to the internal state.
 type EventDesc struct {
-	// Name is the event name used when calling for a transition.
-	Name EventName
-
-	// Src is a slice of source states that the FSM must be in to perform a
-	// this transition.
-	Src []StateKey
-
-	// Dst is the destination state that the FSM will be in if the transition
-	// succeds.
-	// A nil value means the state does not change (but the state handler will
-	// get called again)
-	Dst StateKey
+	// Transition map is a map of source state to destination state when the event
+	// is triggered
+	// a destination of nil means no change in state, but the state handler will
+	// be triggered again
+	TransitionMap TransitionMap
 
 	// ApplyTransition is a function to make additional modifications to state
 	// based on the event
 	ApplyTransition ApplyTransitionFunc
 }
+
+// Events describes the different events that can happen in a state machine
+type Events map[EventName]EventDesc
 
 // StateType is a type for a state, represented by an empty concrete value for a state
 type StateType interface{}
