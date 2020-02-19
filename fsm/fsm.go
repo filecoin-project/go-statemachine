@@ -249,6 +249,10 @@ func (dc fsmContext) Context() context.Context {
 	return dc.ctx.Context()
 }
 
+func (dc fsmContext) Identifier() Identifier {
+	return dc.ctx.Name()
+}
+
 func (dc fsmContext) Event(event EventName, args ...interface{}) error {
 	evt, err := dc.d.event(dc.ctx.Context(), event, nil, args...)
 	if err != nil {
