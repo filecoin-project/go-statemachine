@@ -103,6 +103,43 @@ func TestPersist(t *testing.T) {
 	}
 }
 
+func TestBegin(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	ds := datastore.NewMapDatastore()
+
+	th := &testHandler{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+	smm := New(ds, th, TestState{})
+
+	// should not work for an invalid starting value
+	err := smm.Begin(uint64(2), uint64(4))
+	assert.Error(t, err, "loadOrCreate state: initialized item with incorrect type uint64")
+
+	// should initiate tracking successfully
+	err = smm.Begin(uint64(2), &TestState{A: 2})
+	assert.NilError(t, err)
+
+	// assert initialized with non default value
+	storedVal := smm.Get(uint64(2))
+	var ts TestState
+	err = storedVal.Get(&ts)
+	assert.NilError(t, err)
+	assert.Equal(t, ts.A, uint64(2))
+
+	// assert cannot initialize twice
+	err = smm.Begin(uint64(2), &TestState{A: 2})
+	assert.Error(t, err, "Begin: already tracking identifier `2`")
+
+	smm.Stop(ctx)
+
+	// assert cannot initialize even if just stored twice
+	smm = New(ds, th, TestState{})
+	err = smm.Begin(uint64(2), &TestState{A: 2})
+	assert.Error(t, err, "Begin: cannot initiate a state for identifier `2` that already exists")
+
+}
+
 func TestPartialHandling(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 	ctx := context.Background()

@@ -36,6 +36,32 @@ func New(ds datastore.Datastore, hnd StateHandler, stateType interface{}) *State
 	}
 }
 
+// Begin initiates tracking with a specific value for a given identifier
+func (s *StateGroup) Begin(id interface{}, userState interface{}) error {
+	s.lk.Lock()
+	defer s.lk.Unlock()
+
+	sm, exist := s.sms[statestore.ToKey(id)]
+	if exist {
+		return xerrors.Errorf("Begin: already tracking identifier `%v`", id)
+	}
+
+	exists, err := s.sts.Has(id)
+	if err != nil {
+		return xerrors.Errorf("failed to check if state for %v exists: %w", id, err)
+	}
+	if exists {
+		return xerrors.Errorf("Begin: cannot initiate a state for identifier `%v` that already exists", id)
+	}
+
+	sm, err = s.loadOrCreate(id, userState)
+	if err != nil {
+		return xerrors.Errorf("loadOrCreate state: %w", err)
+	}
+	s.sms[statestore.ToKey(id)] = sm
+	return nil
+}
+
 // Send sends an event to machine identified by `id`.
 // `evt` is going to be passed into StateHandler.Planner, in the events[].User param
 //
@@ -47,7 +73,8 @@ func (s *StateGroup) Send(id interface{}, evt interface{}) (err error) {
 
 	sm, exist := s.sms[statestore.ToKey(id)]
 	if !exist {
-		sm, err = s.loadOrCreate(id)
+		userState := reflect.New(s.stateType).Interface()
+		sm, err = s.loadOrCreate(id, userState)
 		if err != nil {
 			return xerrors.Errorf("loadOrCreate state: %w", err)
 		}
@@ -57,14 +84,16 @@ func (s *StateGroup) Send(id interface{}, evt interface{}) (err error) {
 	return sm.send(Event{User: evt})
 }
 
-func (s *StateGroup) loadOrCreate(name interface{}) (*StateMachine, error) {
+func (s *StateGroup) loadOrCreate(name interface{}, userState interface{}) (*StateMachine, error) {
 	exists, err := s.sts.Has(name)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to check if state for %v exists: %w", name, err)
 	}
 
 	if !exists {
-		userState := reflect.New(s.stateType).Interface()
+		if !reflect.TypeOf(userState).AssignableTo(reflect.PtrTo(s.stateType)) {
+			return nil, xerrors.Errorf("initialized item with incorrect type %s", reflect.TypeOf(userState).Name())
+		}
 
 		err = s.sts.Begin(name, userState)
 		if err != nil {
