@@ -78,10 +78,9 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 		if !reflect.TypeOf(state).AssignableTo(stateFieldType.Type) {
 			return nil, xerrors.Errorf("state key is not assignable to: %s", stateFieldType.Type.Name())
 		}
-		expectedHandlerType := reflect.FuncOf([]reflect.Type{reflect.TypeOf((*Context)(nil)).Elem(), environmentType, d.stateType}, []reflect.Type{reflect.TypeOf(new(error)).Elem()}, false)
-		validHandler := expectedHandlerType.AssignableTo(reflect.TypeOf(stateHandler))
-		if !validHandler {
-			return nil, xerrors.Errorf("handler for state does not match expected type")
+		err := inspectStateHandler(stateHandler, environmentType, d.stateType)
+		if err != nil {
+			return nil, err
 		}
 		d.stateHandlers[state] = stateHandler
 	}
@@ -251,4 +250,27 @@ func inspectApplyTransitionFunc(name EventName, e EventDesc, stateType reflect.T
 		argumentTypes[i] = atType.In(i + 1)
 	}
 	return argumentTypes, nil
+}
+
+func inspectStateHandler(stateHandler interface{}, environmentType reflect.Type, stateType reflect.Type) error {
+	stateHandlerType := reflect.TypeOf(stateHandler)
+	if stateHandlerType.Kind() != reflect.Func {
+		return xerrors.Errorf("handler for state is not a function")
+	}
+	if stateHandlerType.NumIn() != 3 {
+		return xerrors.Errorf("handler for state does not take correct number of arguments")
+	}
+	if !reflect.TypeOf((*Context)(nil)).Elem().AssignableTo(stateHandlerType.In(0)) {
+		return xerrors.Errorf("handler for state does not match context parameter")
+	}
+	if !environmentType.AssignableTo(stateHandlerType.In(1)) {
+		return xerrors.Errorf("handler for state does not match environment parameter")
+	}
+	if !stateType.AssignableTo(stateHandlerType.In(2)) {
+		return xerrors.Errorf("handler for state does not match state parameter")
+	}
+	if stateHandlerType.NumOut() != 1 || !stateHandlerType.Out(0).AssignableTo(reflect.TypeOf(new(error)).Elem()) {
+		return xerrors.Errorf("handler for state does not return an error")
+	}
+	return nil
 }

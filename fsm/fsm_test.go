@@ -234,21 +234,99 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.Nil(t, smm)
 		require.EqualError(t, err, "state key is not assignable to: uint64")
 	})
-	t.Run("State Handler with bad statehandler", func(t *testing.T) {
+	t.Run("State Handler is not a function", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
 			StateHandlers: fsm.StateHandlers{
-				uint64(1): func(ctx fsm.Context, te *testEnvironment, u uint64) error {
+				uint64(1): "cheese",
+			},
+			Notifier: nil,
+		})
+		require.Nil(t, smm)
+		require.EqualError(t, err, "handler for state is not a function")
+	})
+	t.Run("State Handler has wrong parameter count", func(t *testing.T) {
+		smm, err := fsm.New(ds, fsm.Parameters{
+			Environment:   te,
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events:        events,
+			StateHandlers: fsm.StateHandlers{
+				uint64(1): func() error {
 					return nil
 				},
 			},
 			Notifier: nil,
 		})
 		require.Nil(t, smm)
-		require.EqualError(t, err, "handler for state does not match expected type")
+		require.EqualError(t, err, "handler for state does not take correct number of arguments")
+	})
+	t.Run("State Handler has no context parameter", func(t *testing.T) {
+		smm, err := fsm.New(ds, fsm.Parameters{
+			Environment:   te,
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events:        events,
+			StateHandlers: fsm.StateHandlers{
+				uint64(1): func(ctx uint64, te *testEnvironment, ts statemachine.TestState) error {
+					return nil
+				},
+			},
+			Notifier: nil,
+		})
+		require.Nil(t, smm)
+		require.EqualError(t, err, "handler for state does not match context parameter")
+	})
+	t.Run("State Handler has wrong environment parameter", func(t *testing.T) {
+		smm, err := fsm.New(ds, fsm.Parameters{
+			Environment:   te,
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events:        events,
+			StateHandlers: fsm.StateHandlers{
+				uint64(1): func(ctx fsm.Context, te uint64, ts statemachine.TestState) error {
+					return nil
+				},
+			},
+			Notifier: nil,
+		})
+		require.Nil(t, smm)
+		require.EqualError(t, err, "handler for state does not match environment parameter")
+	})
+	t.Run("State Handler has wrong state parameter", func(t *testing.T) {
+		smm, err := fsm.New(ds, fsm.Parameters{
+			Environment:   te,
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events:        events,
+			StateHandlers: fsm.StateHandlers{
+				uint64(1): func(ctx fsm.Context, te *testEnvironment, ts uint64) error {
+					return nil
+				},
+			},
+			Notifier: nil,
+		})
+		require.Nil(t, smm)
+		require.EqualError(t, err, "handler for state does not match state parameter")
+	})
+
+	t.Run("State Handler has wrong return", func(t *testing.T) {
+		smm, err := fsm.New(ds, fsm.Parameters{
+			Environment:   te,
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events:        events,
+			StateHandlers: fsm.StateHandlers{
+				uint64(1): func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) {
+				},
+			},
+			Notifier: nil,
+		})
+		require.Nil(t, smm)
+		require.EqualError(t, err, "handler for state does not return an error")
 	})
 }
 
