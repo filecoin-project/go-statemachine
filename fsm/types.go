@@ -95,6 +95,9 @@ type Notifier func(eventName EventName, state StateType)
 // Group is a manager of a group of states that follows finite state machine logic
 type Group interface {
 
+	// Begin initiates tracking with a specific value for a given identifier
+	Begin(id interface{}, userState interface{}) error
+
 	// Send sends the given event name and parameters to the state specified by id
 	// it will error if there are underlying state store errors or if the parameters
 	// do not match what is expected for the event name
