@@ -9,9 +9,6 @@ import (
 // EventName is the name of an event
 type EventName interface{}
 
-// Identifier is a unique identifier for a given statemachine instance
-type Identifier interface{}
-
 // Context provides access to the statemachine inside of a state handler
 type Context interface {
 	// Context returns the golang context for this context

@@ -84,8 +84,7 @@ func (fsm *StateMachine) run() {
 			}
 
 			ctx := Context{
-				ctx:  context.TODO(),
-				name: fsm.name,
+				ctx: context.TODO(),
 				send: func(evt interface{}) error {
 					return fsm.send(Event{User: evt})
 				},
