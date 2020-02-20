@@ -7,7 +7,7 @@ import (
 )
 
 // EventName is the name of an event
-type EventName string
+type EventName interface{}
 
 // Identifier is a unique identifier for a given statemachine instance
 type Identifier interface{}
@@ -89,8 +89,14 @@ type WorldBuilder interface{}
 type StateHandler interface{}
 
 // StateHandlers is a map between states and their handlers
-// StateKey = nil is a special value that means call this on every function
 type StateHandlers map[StateKey]StateHandler
+
+// Notifier should be a function that takes two parameters,
+// a native event type and a statetype
+// -- nil means no notification
+// it is called after every successful state transition
+// with the even that triggered it
+type Notifier func(eventName EventName, state StateType)
 
 // Group is a manager of a group of states that follows finite state machine logic
 type Group interface {
@@ -114,4 +120,34 @@ type Group interface {
 
 	// Stop stops all state machines in this group
 	Stop(ctx context.Context) error
+}
+
+// Parameters are the parameters that define a finite state machine
+type Parameters struct {
+	// required
+
+	// WorldBuilder generates the environment the state handlers operate --
+	// used to connect to outside dependencies
+	WorldBuilder WorldBuilder
+
+	// StateType is the type of state being tracked. Should be a zero value of the state struct, in
+	// non-pointer form
+	StateType StateType
+
+	// StateKeyField is the field in the state struct that will be used to uniquely identify the current state
+	StateKeyField StateKeyField
+
+	// Events is the list of events that that can be dispatched to the state machine to initiate transitions.
+	// See EventDesc for event properties
+	Events Events
+
+	// StateHandlers - functions that will get called each time the machine enters a particular
+	// state. this is a map of state key -> handler.
+	StateHandlers StateHandlers
+
+	// optional
+
+	// Notifier is a function that gets called on every successful event processing
+	// with the event name and the new state
+	Notifier Notifier
 }

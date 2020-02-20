@@ -59,10 +59,7 @@ var events = fsm.Events{
 }
 
 var stateHandlers = fsm.StateHandlers{
-	nil: func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
-		tw.universalCalls++
-		return nil
-	},
+
 	uint64(1): func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
 		err := ctx.Event("b", uint64(55))
 		assert.NilError(tw.t, err)
@@ -80,119 +77,217 @@ var stateHandlers = fsm.StateHandlers{
 func TestTypeCheckingOnSetup(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-	twb := func(id fsm.Identifier) *testWorld {
-		return tw
-	}
 	t.Run("Bad state field", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "Jesus", events, stateHandlers)
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
+			},
+			StateType:     statemachine.TestState{},
+			StateKeyField: "Jesus",
+			Events:        events,
+			StateHandlers: stateHandlers,
+			Notifier:      nil,
+		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "state type has no field `Jesus`")
 	})
 	t.Run("State field not comparable", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "C", events, stateHandlers)
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
+			},
+			StateType:     statemachine.TestState{},
+			StateKeyField: "C",
+			Events:        events,
+			StateHandlers: stateHandlers,
+			Notifier:      nil,
+		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "state field `C` is not comparable")
 	})
 	t.Run("Event description has bad source type", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
-			"start": {
-				TransitionMap: fsm.TransitionMap{
-					"happy": uint64(1),
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
+			},
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				"start": {
+					TransitionMap: fsm.TransitionMap{
+						"happy": uint64(1),
+					},
 				},
 			},
-		}, stateHandlers)
+			StateHandlers: stateHandlers,
+			Notifier:      nil,
+		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `start` source type is not assignable to: uint64")
 	})
 	t.Run("Event description has bad destination type", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
-			"start": {
-				TransitionMap: fsm.TransitionMap{
-					uint64(1): "happy",
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
+			},
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				"start": {
+					TransitionMap: fsm.TransitionMap{
+						uint64(1): "happy",
+					},
 				},
 			},
-		}, stateHandlers)
+			StateHandlers: stateHandlers,
+			Notifier:      nil,
+		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `start` destination type is not assignable to: uint64")
 	})
 	t.Run("Event description has callback that is not a function", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
-			"b": {
-				TransitionMap: fsm.TransitionMap{
-					uint64(1): uint64(2),
-				},
-				ApplyTransition: "applesuace",
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
 			},
-		}, stateHandlers)
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				"b": {
+					TransitionMap: fsm.TransitionMap{
+						uint64(1): uint64(2),
+					},
+					ApplyTransition: "applesuace",
+				},
+			},
+			StateHandlers: stateHandlers,
+			Notifier:      nil,
+		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `b` has a callback that is not a function")
 	})
 	t.Run("Event description has callback with no parameters", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
-			"b": {
-				TransitionMap: fsm.TransitionMap{
-					uint64(1): uint64(2),
-				},
-				ApplyTransition: func() {},
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
 			},
-		}, stateHandlers)
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				"b": {
+					TransitionMap: fsm.TransitionMap{
+						uint64(1): uint64(2),
+					},
+					ApplyTransition: func() {},
+				},
+			},
+			StateHandlers: stateHandlers,
+			Notifier:      nil,
+		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
 	})
 	t.Run("Event description has callback with wrong first parameter", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
-			"b": {
-				TransitionMap: fsm.TransitionMap{
-					uint64(1): uint64(2),
-				},
-				ApplyTransition: func(uint64) error { return nil },
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
 			},
-		}, stateHandlers)
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				"b": {
+					TransitionMap: fsm.TransitionMap{
+						uint64(1): uint64(2),
+					},
+					ApplyTransition: func(uint64) error { return nil },
+				},
+			},
+			StateHandlers: stateHandlers,
+			Notifier:      nil,
+		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
 	})
 	t.Run("Event description has callback that doesn't return an error", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", fsm.Events{
-			"b": {
-				TransitionMap: fsm.TransitionMap{
-					uint64(1): uint64(2),
-				},
-				ApplyTransition: func(*statemachine.TestState) {},
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
 			},
-		}, stateHandlers)
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				"b": {
+					TransitionMap: fsm.TransitionMap{
+						uint64(1): uint64(2),
+					},
+					ApplyTransition: func(*statemachine.TestState) {},
+				},
+			},
+			StateHandlers: stateHandlers,
+			Notifier:      nil,
+		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `b` callback should return exactly one param that is an error")
 	})
 	t.Run("State Handler with bad stateKey", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, fsm.StateHandlers{
-			"apples": func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
-				err := ctx.Event("b", uint64(55))
-				assert.NilError(tw.t, err)
-				<-tw.proceed
-				return nil
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
 			},
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events:        events,
+			StateHandlers: fsm.StateHandlers{
+				"apples": func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
+					err := ctx.Event("b", uint64(55))
+					assert.NilError(tw.t, err)
+					<-tw.proceed
+					return nil
+				},
+			},
+			Notifier: nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "state key is not assignable to: uint64")
 	})
 	t.Run("State Handler with bad statehandler", func(t *testing.T) {
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, fsm.StateHandlers{
-			uint64(1): func(ctx fsm.Context, tw *testWorld, u uint64) error {
-				return nil
+		smm, err := fsm.New(ds, fsm.Parameters{
+			WorldBuilder: func(id fsm.Identifier) *testWorld {
+				return tw
 			},
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events:        events,
+			StateHandlers: fsm.StateHandlers{
+				uint64(1): func(ctx fsm.Context, tw *testWorld, u uint64) error {
+					return nil
+				},
+			},
+			Notifier: nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "handler for state does not match expected type")
 	})
 }
 
+func newFsm(ds datastore.Datastore, tw *testWorld) (fsm.Group, error) {
+	defaultFsmParams := fsm.Parameters{
+		WorldBuilder: func(id fsm.Identifier) *testWorld {
+			return tw
+		},
+		StateType:     statemachine.TestState{},
+		StateKeyField: "A",
+		Events:        events,
+		StateHandlers: stateHandlers,
+		Notifier:      nil,
+	}
+	return fsm.New(ds, defaultFsmParams)
+}
+
 func TestArgumentChecks(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-	twb := func(id fsm.Identifier) *testWorld {
-		return tw
-	}
-	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
+	smm, err := newFsm(ds, tw)
 	close(tw.proceed)
 	require.NoError(t, err)
 
@@ -216,10 +311,7 @@ func TestBasic(t *testing.T) {
 
 		tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 		close(tw.proceed)
-		twb := func(id fsm.Identifier) *testWorld {
-			return tw
-		}
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
+		smm, err := newFsm(ds, tw)
 		require.NoError(t, err)
 
 		err = smm.Send(uint64(2), "start")
@@ -235,10 +327,7 @@ func TestPersist(t *testing.T) {
 		ds := datastore.NewMapDatastore()
 
 		tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-		twb := func(id fsm.Identifier) *testWorld {
-			return tw
-		}
-		smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
+		smm, err := newFsm(ds, tw)
 		require.NoError(t, err)
 
 		err = smm.Send(uint64(2), "start")
@@ -249,7 +338,7 @@ func TestPersist(t *testing.T) {
 			return
 		}
 
-		smm, err = fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
+		smm, err = newFsm(ds, tw)
 		require.NoError(t, err)
 		err = smm.Send(uint64(2), "restart")
 		require.NoError(t, err)
@@ -265,10 +354,7 @@ func TestSyncEventHandling(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-	twb := func(id fsm.Identifier) *testWorld {
-		return tw
-	}
-	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
+	smm, err := newFsm(ds, tw)
 	close(tw.proceed)
 	require.NoError(t, err)
 
@@ -290,22 +376,35 @@ func TestSyncEventHandling(t *testing.T) {
 
 }
 
-func TestUniversalHandler(t *testing.T) {
+func TestNotification(t *testing.T) {
+	notifications := 0
+
+	var notifier fsm.Notifier = func(eventName fsm.EventName, state fsm.StateType) {
+		notifications++
+	}
+
 	ds := datastore.NewMapDatastore()
 
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(tw.proceed)
-	twb := func(id fsm.Identifier) *testWorld {
-		return tw
+	params := fsm.Parameters{
+		WorldBuilder: func(id fsm.Identifier) *testWorld {
+			return tw
+		},
+		StateType:     statemachine.TestState{},
+		StateKeyField: "A",
+		Events:        events,
+		StateHandlers: stateHandlers,
+		Notifier:      notifier,
 	}
-	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
+	smm, err := fsm.New(ds, params)
 	require.NoError(t, err)
 
 	err = smm.Send(uint64(2), "start")
 	require.NoError(t, err)
 	<-tw.done
 
-	require.Equal(t, tw.universalCalls, uint64(2))
+	require.Equal(t, notifications, 2)
 }
 
 func TestNoChangeHandler(t *testing.T) {
@@ -313,10 +412,7 @@ func TestNoChangeHandler(t *testing.T) {
 
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(tw.proceed)
-	twb := func(id fsm.Identifier) *testWorld {
-		return tw
-	}
-	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
+	smm, err := newFsm(ds, tw)
 	require.NoError(t, err)
 
 	err = smm.Send(uint64(2), "start")
@@ -335,10 +431,7 @@ func TestAllStateEvent(t *testing.T) {
 
 	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(tw.proceed)
-	twb := func(id fsm.Identifier) *testWorld {
-		return tw
-	}
-	smm, err := fsm.New(ds, twb, statemachine.TestState{}, "A", events, stateHandlers)
+	smm, err := newFsm(ds, tw)
 	require.NoError(t, err)
 
 	// any can run from any state and function like start

@@ -24,14 +24,13 @@ type stateGroup struct {
 // events: list of events that can be dispatched to the statemachine
 // stateHandlers: callbacks that are called upon entering a particular state
 // after processing events
-func New(ds datastore.Datastore, worldBuilder WorldBuilder, stateType StateType,
-	stateField StateKeyField, events Events, stateHandlers StateHandlers) (Group, error) {
-	handler, err := NewFSMHandler(worldBuilder, stateType, stateField, events, stateHandlers)
+func New(ds datastore.Datastore, parameters Parameters) (Group, error) {
+	handler, err := NewFSMHandler(parameters)
 	if err != nil {
 		return nil, err
 	}
 	d := handler.(fsmHandler)
-	return &stateGroup{StateGroup: statemachine.New(ds, handler, stateType), d: d}, nil
+	return &stateGroup{StateGroup: statemachine.New(ds, handler, parameters.StateType), d: d}, nil
 }
 
 // Send sends the given event name and parameters to the state specified by id
