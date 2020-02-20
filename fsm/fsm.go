@@ -18,28 +18,14 @@ type fsmHandler struct {
 	callbacks     map[EventName]callback
 	transitions   map[eKey]StateKey
 	stateHandlers StateHandlers
-	worldBuilder  WorldBuilder
+	environment   Environment
 }
 
 // NewFSMHandler defines an StateHandler for go-statemachine that implements
 // a traditional Finite State Machine model -- transitions, start states,
 // end states, and callbacks
 func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
-	worldBuilderType := reflect.TypeOf(parameters.WorldBuilder)
-
-	if worldBuilderType.Kind() != reflect.Func {
-		return nil, xerrors.New("world builder is not a function")
-	}
-	if worldBuilderType.NumIn() != 1 {
-		return nil, xerrors.Errorf("world builder must take a parameter")
-	}
-	if !reflect.TypeOf((*interface{})(nil)).Elem().AssignableTo(worldBuilderType.In(0)) {
-		return nil, xerrors.Errorf("world builder must take an empty interface parameter")
-	}
-	if worldBuilderType.NumOut() != 1 {
-		return nil, xerrors.Errorf("world builder have exactly 1 return")
-	}
-	worldType := worldBuilderType.Out(0)
+	environmentType := reflect.TypeOf(parameters.Environment)
 	stateType := reflect.TypeOf(parameters.StateType)
 	stateFieldType, ok := stateType.FieldByName(string(parameters.StateKeyField))
 	if !ok {
@@ -50,12 +36,13 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 	}
 
 	d := fsmHandler{
-		worldBuilder:  parameters.WorldBuilder,
+		environment:   parameters.Environment,
 		stateType:     stateType,
 		stateKeyField: parameters.StateKeyField,
 		callbacks:     make(map[EventName]callback),
 		transitions:   make(map[eKey]StateKey),
 		stateHandlers: make(StateHandlers),
+		notifier:      parameters.Notifier,
 	}
 
 	// Build transition map and store sets of all events and states.
@@ -91,7 +78,7 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 		if !reflect.TypeOf(state).AssignableTo(stateFieldType.Type) {
 			return nil, xerrors.Errorf("state key is not assignable to: %s", stateFieldType.Type.Name())
 		}
-		expectedHandlerType := reflect.FuncOf([]reflect.Type{reflect.TypeOf((*Context)(nil)).Elem(), worldType, d.stateType}, []reflect.Type{reflect.TypeOf(new(error)).Elem()}, false)
+		expectedHandlerType := reflect.FuncOf([]reflect.Type{reflect.TypeOf((*Context)(nil)).Elem(), environmentType, d.stateType}, []reflect.Type{reflect.TypeOf(new(error)).Elem()}, false)
 		validHandler := expectedHandlerType.AssignableTo(reflect.TypeOf(stateHandler))
 		if !validHandler {
 			return nil, xerrors.Errorf("handler for state does not match expected type")
@@ -99,7 +86,6 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 		d.stateHandlers[state] = stateHandler
 	}
 
-	d.notifier = parameters.Notifier
 	return d, nil
 }
 
@@ -181,8 +167,7 @@ func (d fsmHandler) handler(cb interface{}) interface{} {
 		ctx := args[0].Interface().(statemachine.Context)
 		state := args[1].Interface()
 		dContext := fsmContext{state, ctx, d}
-		world := reflect.ValueOf(d.worldBuilder).Call([]reflect.Value{reflect.ValueOf(ctx.Name())})[0]
-		return reflect.ValueOf(cb).Call([]reflect.Value{reflect.ValueOf(dContext), world, args[1]})
+		return reflect.ValueOf(cb).Call([]reflect.Value{reflect.ValueOf(dContext), reflect.ValueOf(d.environment), args[1]})
 	}).Interface()
 }
 

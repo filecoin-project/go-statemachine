@@ -17,13 +17,7 @@ type stateGroup struct {
 // New generates a new state group that operates like a finite state machine,
 // based on the given parameters
 // ds: data store where state comes from
-// world: any external interface this state needs to talk to
-// stateType: the concrete type of state struct that will be managed
-// stateKeyField: the field of the state struct that will serve as the
-// key for the current state
-// events: list of events that can be dispatched to the statemachine
-// stateHandlers: callbacks that are called upon entering a particular state
-// after processing events
+// parameters: finite state machine parameters
 func New(ds datastore.Datastore, parameters Parameters) (Group, error) {
 	handler, err := NewFSMHandler(parameters)
 	if err != nil {

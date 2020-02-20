@@ -17,7 +17,7 @@ func init() {
 	logging.SetLogLevel("*", "INFO") // nolint: errcheck
 }
 
-type testWorld struct {
+type testEnvironment struct {
 	universalCalls uint64
 	t              *testing.T
 	proceed        chan struct{}
@@ -60,28 +60,26 @@ var events = fsm.Events{
 
 var stateHandlers = fsm.StateHandlers{
 
-	uint64(1): func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
+	uint64(1): func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
 		err := ctx.Event("b", uint64(55))
-		assert.NilError(tw.t, err)
-		<-tw.proceed
+		assert.NilError(te.t, err)
+		<-te.proceed
 		return nil
 	},
-	uint64(2): func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
+	uint64(2): func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
 
-		assert.Equal(tw.t, uint64(2), ts.A)
-		close(tw.done)
+		assert.Equal(te.t, uint64(2), ts.A)
+		close(te.done)
 		return nil
 	},
 }
 
 func TestTypeCheckingOnSetup(t *testing.T) {
 	ds := datastore.NewMapDatastore()
-	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 	t.Run("Bad state field", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "Jesus",
 			Events:        events,
@@ -93,9 +91,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 	t.Run("State field not comparable", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "C",
 			Events:        events,
@@ -107,9 +103,8 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 	t.Run("Event description has bad source type", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment: te,
+
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
@@ -127,9 +122,8 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 	t.Run("Event description has bad destination type", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment: te,
+
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
@@ -147,9 +141,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 	t.Run("Event description has callback that is not a function", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
@@ -168,9 +160,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 	t.Run("Event description has callback with no parameters", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
@@ -189,9 +179,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 	t.Run("Event description has callback with wrong first parameter", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
@@ -210,9 +198,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 	t.Run("Event description has callback that doesn't return an error", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
@@ -231,17 +217,15 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 	t.Run("State Handler with bad stateKey", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
 			StateHandlers: fsm.StateHandlers{
-				"apples": func(ctx fsm.Context, tw *testWorld, ts statemachine.TestState) error {
+				"apples": func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
 					err := ctx.Event("b", uint64(55))
-					assert.NilError(tw.t, err)
-					<-tw.proceed
+					assert.NilError(te.t, err)
+					<-te.proceed
 					return nil
 				},
 			},
@@ -252,14 +236,12 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 	t.Run("State Handler with bad statehandler", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			WorldBuilder: func(id fsm.Identifier) *testWorld {
-				return tw
-			},
+			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
 			StateHandlers: fsm.StateHandlers{
-				uint64(1): func(ctx fsm.Context, tw *testWorld, u uint64) error {
+				uint64(1): func(ctx fsm.Context, te *testEnvironment, u uint64) error {
 					return nil
 				},
 			},
@@ -270,11 +252,9 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 }
 
-func newFsm(ds datastore.Datastore, tw *testWorld) (fsm.Group, error) {
+func newFsm(ds datastore.Datastore, te *testEnvironment) (fsm.Group, error) {
 	defaultFsmParams := fsm.Parameters{
-		WorldBuilder: func(id fsm.Identifier) *testWorld {
-			return tw
-		},
+		Environment:   te,
 		StateType:     statemachine.TestState{},
 		StateKeyField: "A",
 		Events:        events,
@@ -286,9 +266,9 @@ func newFsm(ds datastore.Datastore, tw *testWorld) (fsm.Group, error) {
 
 func TestArgumentChecks(t *testing.T) {
 	ds := datastore.NewMapDatastore()
-	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-	smm, err := newFsm(ds, tw)
-	close(tw.proceed)
+	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+	smm, err := newFsm(ds, te)
+	close(te.proceed)
 	require.NoError(t, err)
 
 	// should take B with correct arguments
@@ -309,15 +289,15 @@ func TestBasic(t *testing.T) {
 	for i := 0; i < 1000; i++ { // run a few times to expose any races
 		ds := datastore.NewMapDatastore()
 
-		tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-		close(tw.proceed)
-		smm, err := newFsm(ds, tw)
+		te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+		close(te.proceed)
+		smm, err := newFsm(ds, te)
 		require.NoError(t, err)
 
 		err = smm.Send(uint64(2), "start")
 		require.NoError(t, err)
 
-		<-tw.done
+		<-te.done
 
 	}
 }
@@ -326,8 +306,8 @@ func TestPersist(t *testing.T) {
 	for i := 0; i < 1000; i++ { // run a few times to expose any races
 		ds := datastore.NewMapDatastore()
 
-		tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-		smm, err := newFsm(ds, tw)
+		te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+		smm, err := newFsm(ds, te)
 		require.NoError(t, err)
 
 		err = smm.Send(uint64(2), "start")
@@ -338,14 +318,14 @@ func TestPersist(t *testing.T) {
 			return
 		}
 
-		smm, err = newFsm(ds, tw)
+		smm, err = newFsm(ds, te)
 		require.NoError(t, err)
 		err = smm.Send(uint64(2), "restart")
 		require.NoError(t, err)
 
-		close(tw.proceed)
+		close(te.proceed)
 
-		<-tw.done
+		<-te.done
 	}
 }
 
@@ -353,9 +333,9 @@ func TestSyncEventHandling(t *testing.T) {
 	ctx := context.Background()
 	ds := datastore.NewMapDatastore()
 
-	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-	smm, err := newFsm(ds, tw)
-	close(tw.proceed)
+	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+	smm, err := newFsm(ds, te)
+	close(te.proceed)
 	require.NoError(t, err)
 
 	// events that should fail based on state, only picked up with SendSync
@@ -385,12 +365,10 @@ func TestNotification(t *testing.T) {
 
 	ds := datastore.NewMapDatastore()
 
-	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
-	close(tw.proceed)
+	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
+	close(te.proceed)
 	params := fsm.Parameters{
-		WorldBuilder: func(id fsm.Identifier) *testWorld {
-			return tw
-		},
+		Environment:   te,
 		StateType:     statemachine.TestState{},
 		StateKeyField: "A",
 		Events:        events,
@@ -402,7 +380,7 @@ func TestNotification(t *testing.T) {
 
 	err = smm.Send(uint64(2), "start")
 	require.NoError(t, err)
-	<-tw.done
+	<-te.done
 
 	require.Equal(t, notifications, 2)
 }
@@ -410,38 +388,38 @@ func TestNotification(t *testing.T) {
 func TestNoChangeHandler(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 
-	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
-	close(tw.proceed)
-	smm, err := newFsm(ds, tw)
+	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
+	close(te.proceed)
+	smm, err := newFsm(ds, te)
 	require.NoError(t, err)
 
 	err = smm.Send(uint64(2), "start")
 	require.NoError(t, err)
-	<-tw.done
+	<-te.done
 
-	tw.done = make(chan struct{})
+	te.done = make(chan struct{})
 	// call resume to retrigger step2
 	err = smm.Send(uint64(2), "resume")
 	require.NoError(t, err)
-	<-tw.done
+	<-te.done
 }
 
 func TestAllStateEvent(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 
-	tw := &testWorld{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
-	close(tw.proceed)
-	smm, err := newFsm(ds, tw)
+	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
+	close(te.proceed)
+	smm, err := newFsm(ds, te)
 	require.NoError(t, err)
 
 	// any can run from any state and function like start
 	err = smm.Send(uint64(2), "any")
 	require.NoError(t, err)
-	<-tw.done
+	<-te.done
 
-	tw.done = make(chan struct{})
+	te.done = make(chan struct{})
 	// here any can function like a restart handler
 	err = smm.Send(uint64(2), "any")
 	require.NoError(t, err)
-	<-tw.done
+	<-te.done
 }

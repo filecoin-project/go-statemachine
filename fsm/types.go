@@ -74,15 +74,12 @@ type Events map[EventName]EventDesc
 // StateType is a type for a state, represented by an empty concrete value for a state
 type StateType interface{}
 
-// WorldBuilder is a function that takes a state identifier
-// and returns a connection to any
-// dependencies that will be needed by this particular state machine
-// The return type of the funtion is the concrete type accepted by the state handler
-type WorldBuilder interface{}
+// Environment are externals dependencies will be needed by this particular state machine
+type Environment interface{}
 
 // StateHandler is called upon entering a state after
 // all events are processed. It should have the signature
-// func stateHandler<StateType, World>(ctx Context, world World, state StateType) error
+// func stateHandler<StateType, Environment>(ctx Context, environment Environment, state StateType) error
 type StateHandler interface{}
 
 // StateHandlers is a map between states and their handlers
@@ -123,9 +120,9 @@ type Group interface {
 type Parameters struct {
 	// required
 
-	// WorldBuilder generates the environment the state handlers operate --
+	// Environment is the environment in which the state handlers operate --
 	// used to connect to outside dependencies
-	WorldBuilder WorldBuilder
+	Environment Environment
 
 	// StateType is the type of state being tracked. Should be a zero value of the state struct, in
 	// non-pointer form
