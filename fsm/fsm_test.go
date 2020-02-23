@@ -25,37 +25,16 @@ type testEnvironment struct {
 }
 
 var events = fsm.Events{
-	"start": {
-		TransitionMap: fsm.TransitionMap{
-			uint64(0): uint64(1),
-		},
-	},
-	"restart": {
-		TransitionMap: fsm.TransitionMap{
-			uint64(1): uint64(1),
-			uint64(2): uint64(1),
-		},
-	},
-	"b": {
-		TransitionMap: fsm.TransitionMap{
-			uint64(1): uint64(2),
-		},
-		ApplyTransition: func(state *statemachine.TestState, val uint64) error {
+	fsm.Event("start").From(uint64(0)).To(uint64(1)),
+	fsm.Event("restart").FromMany(uint64(1), uint64(2)).To(uint64(1)),
+	fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback(
+		func(state *statemachine.TestState, val uint64) error {
 			state.B = val
 			return nil
 		},
-	},
-	"resume": {
-		TransitionMap: fsm.TransitionMap{
-			uint64(1): nil,
-			uint64(2): nil,
-		},
-	},
-	"any": {
-		TransitionMap: fsm.TransitionMap{
-			nil: uint64(1),
-		},
-	},
+	),
+	fsm.Event("resume").FromMany(uint64(1), uint64(2)).ToNoChange(),
+	fsm.Event("any").FromAny().To(uint64(1)),
 }
 
 var stateHandlers = fsm.StateHandlers{
@@ -107,13 +86,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
-			Events: fsm.Events{
-				"start": {
-					TransitionMap: fsm.TransitionMap{
-						"happy": uint64(1),
-					},
-				},
-			},
+			Events:        fsm.Events{fsm.Event("start").From("happy").To(uint64(1))},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,
 		})
@@ -126,13 +99,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
-			Events: fsm.Events{
-				"start": {
-					TransitionMap: fsm.TransitionMap{
-						uint64(1): "happy",
-					},
-				},
-			},
+			Events:        fsm.Events{fsm.Event("start").From(uint64(1)).To("happy")},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,
 		})
@@ -144,14 +111,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
-			Events: fsm.Events{
-				"b": {
-					TransitionMap: fsm.TransitionMap{
-						uint64(1): uint64(2),
-					},
-					ApplyTransition: "applesuace",
-				},
-			},
+			Events:        fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback("applesuace")},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,
 		})
@@ -163,14 +123,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
-			Events: fsm.Events{
-				"b": {
-					TransitionMap: fsm.TransitionMap{
-						uint64(1): uint64(2),
-					},
-					ApplyTransition: func() {},
-				},
-			},
+			Events:        fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback(func() {})},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,
 		})
@@ -183,12 +136,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
-				"b": {
-					TransitionMap: fsm.TransitionMap{
-						uint64(1): uint64(2),
-					},
-					ApplyTransition: func(uint64) error { return nil },
-				},
+				fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback(func(uint64) error { return nil }),
 			},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,
@@ -202,12 +150,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
-				"b": {
-					TransitionMap: fsm.TransitionMap{
-						uint64(1): uint64(2),
-					},
-					ApplyTransition: func(*statemachine.TestState) {},
-				},
+				fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback(func(*statemachine.TestState) {}),
 			},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,

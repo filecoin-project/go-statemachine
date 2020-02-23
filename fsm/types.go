@@ -50,26 +50,8 @@ type StateKey interface{}
 // TransitionMap is a map from src state to destination state
 type TransitionMap map[StateKey]StateKey
 
-// EventDesc describes what happens when an event is triggered
-//
-// The event description contains a map of eligible source states
-// to destination states
-// It also contains the specified transition function
-// to make additional modifications to the internal state.
-type EventDesc struct {
-	// Transition map is a map of source state to destination state when the event
-	// is triggered
-	// a destination of nil means no change in state, but the state handler will
-	// be triggered again
-	TransitionMap TransitionMap
-
-	// ApplyTransition is a function to make additional modifications to state
-	// based on the event
-	ApplyTransition ApplyTransitionFunc
-}
-
 // Events describes the different events that can happen in a state machine
-type Events map[EventName]EventDesc
+type Events []EventBuilder
 
 // StateType is a type for a state, represented by an empty concrete value for a state
 type StateType interface{}
@@ -136,7 +118,7 @@ type Parameters struct {
 
 	// Events is the list of events that that can be dispatched to the state machine to initiate transitions.
 	// See EventDesc for event properties
-	Events Events
+	Events []EventBuilder
 
 	// StateHandlers - functions that will get called each time the machine enters a particular
 	// state. this is a map of state key -> handler.
