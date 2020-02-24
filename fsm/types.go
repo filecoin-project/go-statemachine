@@ -24,9 +24,6 @@ type Context interface {
 	// - event X does not exist
 	//
 	// - arguments don't match expected transition
-	//
-	// The last error should never occur in this situation and is a sign of an
-	// internal bug.
 	Event(event EventName, args ...interface{}) error
 }
 
