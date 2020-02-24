@@ -47,7 +47,29 @@ type StateKey interface{}
 // TransitionMap is a map from src state to destination state
 type TransitionMap map[StateKey]StateKey
 
-// Events describes the different events that can happen in a state machine
+// TransitionToBuilder sets the destination of a transition
+type TransitionToBuilder interface {
+	// To means the transition ends in the given state
+	To(StateKey) EventBuilder
+	// ToNoChange means a transition ends in the same state it started in (just retriggers state cb)
+	ToNoChange() EventBuilder
+}
+
+// EventBuilder is an interface for describing events in an fsm and
+// their associated transitions
+type EventBuilder interface {
+	// From begins describing a transition from a specific state
+	From(s StateKey) TransitionToBuilder
+	// FromAny begins describing a transition from any state
+	FromAny() TransitionToBuilder
+	// FromMany begins describing a transition from many states
+	FromMany(sources ...StateKey) TransitionToBuilder
+	// WithCallback describes a callback for this event
+	WithCallback(applyTransition ApplyTransitionFunc) EventBuilder
+}
+
+// Events is a list of the different events that can happen in a state machine,
+// described by EventBuilders
 type Events []EventBuilder
 
 // StateType is a type for a state, represented by an empty concrete value for a state

@@ -8,8 +8,11 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// EventMachine creates and applies events for go-statemachine based on the given event list
 type EventMachine interface {
+	// Event generates an event that can be dispatched to go-statemachine from the given event name and context args
 	Event(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (interface{}, error)
+	// Apply applies the given event from go-statemachine to the given state, based on transition rules
 	Apply(evt statemachine.Event, user interface{}) (EventName, error)
 }
 
@@ -29,11 +32,13 @@ type eKey struct {
 	src interface{}
 }
 
+// callback stores a transition function and its argument types
 type callback struct {
 	argumentTypes   []reflect.Type
 	applyTransition interface{}
 }
 
+// fsmEvent is the internal event type
 type fsmEvent struct {
 	name          EventName
 	args          []interface{}
@@ -41,6 +46,7 @@ type fsmEvent struct {
 	returnChannel chan error
 }
 
+// NewEventMachine returns a new event machine for the given state and event list
 func NewEventMachine(state StateType, stateKeyField StateKeyField, events []EventBuilder) (EventMachine, error) {
 	stateType := reflect.TypeOf(state)
 	stateFieldType, ok := stateType.FieldByName(string(stateKeyField))
@@ -59,7 +65,8 @@ func NewEventMachine(state StateType, stateKeyField StateKeyField, events []Even
 	}
 
 	// Build transition map and store sets of all events and states.
-	for _, evt := range events {
+	for _, evtIface := range events {
+		evt := evtIface.(eventBuilder)
 		name := evt.name
 
 		_, exists := em.callbacks[name]
@@ -88,6 +95,7 @@ func NewEventMachine(state StateType, stateKeyField StateKeyField, events []Even
 	return em, nil
 }
 
+// Event generates an event that can be dispatched to go-statemachine from the given event name and context args
 func (em eventMachine) Event(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (interface{}, error) {
 	cb, ok := em.callbacks[event]
 	if !ok {
@@ -131,6 +139,7 @@ func (em eventMachine) Apply(evt statemachine.Event, user interface{}) (EventNam
 	return e.name, completeEvent(e, nil)
 }
 
+// Apply applies the given event from go-statemachine to the given state, based on transition rules
 func applyTransition(userValue reflect.Value, e fsmEvent, cb callback) error {
 	if cb.applyTransition == nil {
 		return nil
