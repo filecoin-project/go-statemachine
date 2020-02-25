@@ -34,8 +34,8 @@ type eKey struct {
 
 // callback stores a transition function and its argument types
 type callback struct {
-	argumentTypes   []reflect.Type
-	applyTransition interface{}
+	argumentTypes []reflect.Type
+	action        ActionFunc
 }
 
 // fsmEvent is the internal event type
@@ -74,13 +74,13 @@ func NewEventMachine(state StateType, stateKeyField StateKeyField, events []Even
 			return nil, xerrors.Errorf("Duplicate event name `%+v`", name)
 		}
 
-		argumentTypes, err := inspectApplyTransitionFunc(name, evt.applyTransition, stateType)
+		argumentTypes, err := inspectActionFunc(name, evt.action, stateType)
 		if err != nil {
 			return nil, err
 		}
 		em.callbacks[name] = callback{
-			argumentTypes:   argumentTypes,
-			applyTransition: evt.applyTransition,
+			argumentTypes: argumentTypes,
+			action:        evt.action,
 		}
 		for src, dst := range evt.transitionsSoFar {
 			if dst != nil && !reflect.TypeOf(dst).AssignableTo(stateFieldType.Type) {
@@ -128,7 +128,7 @@ func (em eventMachine) Apply(evt statemachine.Event, user interface{}) (EventNam
 		return nil, completeEvent(e, xerrors.Errorf("Invalid transition in queue, state `%+v`, event `%+v`", currentState, e.name))
 	}
 	cb := em.callbacks[e.name]
-	err := applyTransition(userValue, e, cb)
+	err := applyAction(userValue, e, cb)
 	if err != nil {
 		return nil, completeEvent(e, err)
 	}
@@ -140,8 +140,8 @@ func (em eventMachine) Apply(evt statemachine.Event, user interface{}) (EventNam
 }
 
 // Apply applies the given event from go-statemachine to the given state, based on transition rules
-func applyTransition(userValue reflect.Value, e fsmEvent, cb callback) error {
-	if cb.applyTransition == nil {
+func applyAction(userValue reflect.Value, e fsmEvent, cb callback) error {
+	if cb.action == nil {
 		return nil
 	}
 	values := make([]reflect.Value, 0, len(e.args)+1)
@@ -149,7 +149,7 @@ func applyTransition(userValue reflect.Value, e fsmEvent, cb callback) error {
 	for _, arg := range e.args {
 		values = append(values, reflect.ValueOf(arg))
 	}
-	res := reflect.ValueOf(cb.applyTransition).Call(values)
+	res := reflect.ValueOf(cb.action).Call(values)
 
 	if res[0].Interface() != nil {
 		return xerrors.Errorf("Error applying event transition `%+v`: %w", e.name, res[0].Interface().(error))
@@ -167,12 +167,12 @@ func completeEvent(event fsmEvent, err error) error {
 	return err
 }
 
-func inspectApplyTransitionFunc(name EventName, applyTransition ApplyTransitionFunc, stateType reflect.Type) ([]reflect.Type, error) {
-	if applyTransition == nil {
+func inspectActionFunc(name EventName, action ActionFunc, stateType reflect.Type) ([]reflect.Type, error) {
+	if action == nil {
 		return nil, nil
 	}
 
-	atType := reflect.TypeOf(applyTransition)
+	atType := reflect.TypeOf(action)
 	if atType.Kind() != reflect.Func {
 		return nil, xerrors.Errorf("event `%+v` has a callback that is not a function", name)
 	}

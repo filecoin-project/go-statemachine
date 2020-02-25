@@ -2,7 +2,7 @@ package fsm
 
 type transitionToBuilder struct {
 	name             EventName
-	applyTransition  ApplyTransitionFunc
+	action           ActionFunc
 	transitionsSoFar map[StateKey]StateKey
 	nextFrom         []StateKey
 }
@@ -13,7 +13,7 @@ func (t transitionToBuilder) To(to StateKey) EventBuilder {
 	for _, from := range t.nextFrom {
 		transitions[from] = to
 	}
-	return eventBuilder{t.name, t.applyTransition, transitions}
+	return eventBuilder{t.name, t.action, transitions}
 }
 
 // ToNoChange means a transition ends in the same state it started in (just retriggers state cb)
@@ -22,12 +22,12 @@ func (t transitionToBuilder) ToNoChange() EventBuilder {
 	for _, from := range t.nextFrom {
 		transitions[from] = nil
 	}
-	return eventBuilder{t.name, t.applyTransition, transitions}
+	return eventBuilder{t.name, t.action, transitions}
 }
 
 type eventBuilder struct {
 	name             EventName
-	applyTransition  ApplyTransitionFunc
+	action           ActionFunc
 	transitionsSoFar map[StateKey]StateKey
 }
 
@@ -35,7 +35,7 @@ type eventBuilder struct {
 func (t eventBuilder) From(s StateKey) TransitionToBuilder {
 	return transitionToBuilder{
 		t.name,
-		t.applyTransition,
+		t.action,
 		t.transitionsSoFar,
 		[]StateKey{s},
 	}
@@ -45,7 +45,7 @@ func (t eventBuilder) From(s StateKey) TransitionToBuilder {
 func (t eventBuilder) FromAny() TransitionToBuilder {
 	return transitionToBuilder{
 		t.name,
-		t.applyTransition,
+		t.action,
 		t.transitionsSoFar,
 		[]StateKey{nil},
 	}
@@ -55,17 +55,17 @@ func (t eventBuilder) FromAny() TransitionToBuilder {
 func (t eventBuilder) FromMany(sources ...StateKey) TransitionToBuilder {
 	return transitionToBuilder{
 		t.name,
-		t.applyTransition,
+		t.action,
 		t.transitionsSoFar,
 		sources,
 	}
 }
 
-// WithCallback describes a callback for this event
-func (t eventBuilder) WithCallback(applyTransition ApplyTransitionFunc) EventBuilder {
+// Action describes actions taken on the state for this event
+func (t eventBuilder) Action(action ActionFunc) EventBuilder {
 	return eventBuilder{
 		t.name,
-		applyTransition,
+		action,
 		t.transitionsSoFar,
 	}
 }

@@ -27,12 +27,12 @@ type Context interface {
 	Event(event EventName, args ...interface{}) error
 }
 
-// ApplyTransitionFunc modifies the state further in addition
+// ActionFunc modifies the state further in addition
 // to modifying the state key. It the signature
-// func applyTransition<StateType, T extends any[]>(s stateType, args ...T)
+// func action<StateType, T extends any[]>(s stateType, args ...T)
 // and then an event can be dispatched on context or group
 // with the form .Event(Name, args ...T)
-type ApplyTransitionFunc interface{}
+type ActionFunc interface{}
 
 // StateKeyField is the name of a field in a state struct that serves as the key
 // by which the current state is identified
@@ -64,8 +64,8 @@ type EventBuilder interface {
 	FromAny() TransitionToBuilder
 	// FromMany begins describing a transition from many states
 	FromMany(sources ...StateKey) TransitionToBuilder
-	// WithCallback describes a callback for this event
-	WithCallback(applyTransition ApplyTransitionFunc) EventBuilder
+	// Action describes actions taken on the state for this event
+	Action(action ActionFunc) EventBuilder
 }
 
 // Events is a list of the different events that can happen in a state machine,

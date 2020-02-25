@@ -27,7 +27,7 @@ type testEnvironment struct {
 var events = fsm.Events{
 	fsm.Event("start").From(uint64(0)).To(uint64(1)),
 	fsm.Event("restart").FromMany(uint64(1), uint64(2)).To(uint64(1)),
-	fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback(
+	fsm.Event("b").From(uint64(1)).To(uint64(2)).Action(
 		func(state *statemachine.TestState, val uint64) error {
 			state.B = val
 			return nil
@@ -111,7 +111,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
-			Events:        fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback("applesuace")},
+			Events:        fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).Action("applesuace")},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,
 		})
@@ -123,7 +123,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
-			Events:        fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback(func() {})},
+			Events:        fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).Action(func() {})},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,
 		})
@@ -136,7 +136,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
-				fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback(func(uint64) error { return nil }),
+				fsm.Event("b").From(uint64(1)).To(uint64(2)).Action(func(uint64) error { return nil }),
 			},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,
@@ -150,7 +150,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events: fsm.Events{
-				fsm.Event("b").From(uint64(1)).To(uint64(2)).WithCallback(func(*statemachine.TestState) {}),
+				fsm.Event("b").From(uint64(1)).To(uint64(2)).Action(func(*statemachine.TestState) {}),
 			},
 			StateHandlers: stateHandlers,
 			Notifier:      nil,
