@@ -48,7 +48,7 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 	}
 
 	// type check state handlers
-	for state, stateEntryFunc := range parameters.StateEntryFunc {
+	for state, stateEntryFunc := range parameters.StateEntryFuncs {
 		if !reflect.TypeOf(state).AssignableTo(stateFieldType.Type) {
 			return nil, xerrors.Errorf("state key is not assignable to: %s", stateFieldType.Type.Name())
 		}

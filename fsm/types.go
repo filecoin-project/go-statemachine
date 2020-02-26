@@ -141,7 +141,7 @@ type Parameters struct {
 
 	// StateEntryFuncs - functions that will get called each time the machine enters a particular
 	// state. this is a map of state key -> handler.
-	StateEntryFunc StateEntryFuncs
+	StateEntryFuncs StateEntryFuncs
 
 	// optional
 
