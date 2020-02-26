@@ -37,10 +37,10 @@ var events = fsm.Events{
 	fsm.Event("any").FromAny().To(uint64(1)),
 }
 
-var stateHandlers = fsm.StateHandlers{
+var stateEntryFuncs = fsm.StateEntryFuncs{
 
 	uint64(1): func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
-		err := ctx.Event("b", uint64(55))
+		err := ctx.Trigger("b", uint64(55))
 		assert.NilError(te.t, err)
 		<-te.proceed
 		return nil
@@ -58,24 +58,24 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 	t.Run("Bad state field", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			Environment:   te,
-			StateType:     statemachine.TestState{},
-			StateKeyField: "Jesus",
-			Events:        events,
-			StateHandlers: stateHandlers,
-			Notifier:      nil,
+			Environment:    te,
+			StateType:      statemachine.TestState{},
+			StateKeyField:  "Jesus",
+			Events:         events,
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "state type has no field `Jesus`")
 	})
 	t.Run("State field not comparable", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			Environment:   te,
-			StateType:     statemachine.TestState{},
-			StateKeyField: "C",
-			Events:        events,
-			StateHandlers: stateHandlers,
-			Notifier:      nil,
+			Environment:    te,
+			StateType:      statemachine.TestState{},
+			StateKeyField:  "C",
+			Events:         events,
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "state field `C` is not comparable")
@@ -84,11 +84,11 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
 			Environment: te,
 
-			StateType:     statemachine.TestState{},
-			StateKeyField: "A",
-			Events:        fsm.Events{fsm.Event("start").From("happy").To(uint64(1))},
-			StateHandlers: stateHandlers,
-			Notifier:      nil,
+			StateType:      statemachine.TestState{},
+			StateKeyField:  "A",
+			Events:         fsm.Events{fsm.Event("start").From("happy").To(uint64(1))},
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `start` source type is not assignable to: uint64")
@@ -97,35 +97,35 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
 			Environment: te,
 
-			StateType:     statemachine.TestState{},
-			StateKeyField: "A",
-			Events:        fsm.Events{fsm.Event("start").From(uint64(1)).To("happy")},
-			StateHandlers: stateHandlers,
-			Notifier:      nil,
+			StateType:      statemachine.TestState{},
+			StateKeyField:  "A",
+			Events:         fsm.Events{fsm.Event("start").From(uint64(1)).To("happy")},
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `start` destination type is not assignable to: uint64")
 	})
 	t.Run("Event description has callback that is not a function", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			Environment:   te,
-			StateType:     statemachine.TestState{},
-			StateKeyField: "A",
-			Events:        fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).Action("applesuace")},
-			StateHandlers: stateHandlers,
-			Notifier:      nil,
+			Environment:    te,
+			StateType:      statemachine.TestState{},
+			StateKeyField:  "A",
+			Events:         fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).Action("applesuace")},
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `b` has a callback that is not a function")
 	})
 	t.Run("Event description has callback with no parameters", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
-			Environment:   te,
-			StateType:     statemachine.TestState{},
-			StateKeyField: "A",
-			Events:        fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).Action(func() {})},
-			StateHandlers: stateHandlers,
-			Notifier:      nil,
+			Environment:    te,
+			StateType:      statemachine.TestState{},
+			StateKeyField:  "A",
+			Events:         fsm.Events{fsm.Event("b").From(uint64(1)).To(uint64(2)).Action(func() {})},
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
@@ -138,8 +138,8 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			Events: fsm.Events{
 				fsm.Event("b").From(uint64(1)).To(uint64(2)).Action(func(uint64) error { return nil }),
 			},
-			StateHandlers: stateHandlers,
-			Notifier:      nil,
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
@@ -152,8 +152,8 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			Events: fsm.Events{
 				fsm.Event("b").From(uint64(1)).To(uint64(2)).Action(func(*statemachine.TestState) {}),
 			},
-			StateHandlers: stateHandlers,
-			Notifier:      nil,
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
 		})
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `b` callback should return exactly one param that is an error")
@@ -164,9 +164,9 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
-			StateHandlers: fsm.StateHandlers{
+			StateEntryFunc: fsm.StateEntryFuncs{
 				"apples": func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
-					err := ctx.Event("b", uint64(55))
+					err := ctx.Trigger("b", uint64(55))
 					assert.NilError(te.t, err)
 					<-te.proceed
 					return nil
@@ -183,7 +183,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
-			StateHandlers: fsm.StateHandlers{
+			StateEntryFunc: fsm.StateEntryFuncs{
 				uint64(1): "cheese",
 			},
 			Notifier: nil,
@@ -197,7 +197,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
-			StateHandlers: fsm.StateHandlers{
+			StateEntryFunc: fsm.StateEntryFuncs{
 				uint64(1): func() error {
 					return nil
 				},
@@ -213,7 +213,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
-			StateHandlers: fsm.StateHandlers{
+			StateEntryFunc: fsm.StateEntryFuncs{
 				uint64(1): func(ctx uint64, te *testEnvironment, ts statemachine.TestState) error {
 					return nil
 				},
@@ -229,7 +229,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
-			StateHandlers: fsm.StateHandlers{
+			StateEntryFunc: fsm.StateEntryFuncs{
 				uint64(1): func(ctx fsm.Context, te uint64, ts statemachine.TestState) error {
 					return nil
 				},
@@ -245,7 +245,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
-			StateHandlers: fsm.StateHandlers{
+			StateEntryFunc: fsm.StateEntryFuncs{
 				uint64(1): func(ctx fsm.Context, te *testEnvironment, ts uint64) error {
 					return nil
 				},
@@ -262,7 +262,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
 			Events:        events,
-			StateHandlers: fsm.StateHandlers{
+			StateEntryFunc: fsm.StateEntryFuncs{
 				uint64(1): func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) {
 				},
 			},
@@ -275,12 +275,12 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 
 func newFsm(ds datastore.Datastore, te *testEnvironment) (fsm.Group, error) {
 	defaultFsmParams := fsm.Parameters{
-		Environment:   te,
-		StateType:     statemachine.TestState{},
-		StateKeyField: "A",
-		Events:        events,
-		StateHandlers: stateHandlers,
-		Notifier:      nil,
+		Environment:    te,
+		StateType:      statemachine.TestState{},
+		StateKeyField:  "A",
+		Events:         events,
+		StateEntryFunc: stateEntryFuncs,
+		Notifier:       nil,
 	}
 	return fsm.New(ds, defaultFsmParams)
 }
@@ -389,12 +389,12 @@ func TestNotification(t *testing.T) {
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(te.proceed)
 	params := fsm.Parameters{
-		Environment:   te,
-		StateType:     statemachine.TestState{},
-		StateKeyField: "A",
-		Events:        events,
-		StateHandlers: stateHandlers,
-		Notifier:      notifier,
+		Environment:    te,
+		StateType:      statemachine.TestState{},
+		StateKeyField:  "A",
+		Events:         events,
+		StateEntryFunc: stateEntryFuncs,
+		Notifier:       notifier,
 	}
 	smm, err := fsm.New(ds, params)
 	require.NoError(t, err)

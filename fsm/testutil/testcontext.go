@@ -10,16 +10,16 @@ import (
 )
 
 // TestContext is a context you can wired up directly to an event machine so that you can test
-// statehandlers and how they affect state
+// state entry functions and how they affect state
 type TestContext struct {
 	ctx              context.Context
-	eventmachine     fsm.EventMachine
+	eventProcessor   fsm.EventProcessor
 	dispatchedEvents []statemachine.Event
 }
 
 // NewTestContext returns a new test context for the given event machien
-func NewTestContext(ctx context.Context, eventMachine fsm.EventMachine) *TestContext {
-	return &TestContext{ctx, eventMachine, nil}
+func NewTestContext(ctx context.Context, eventProcessor fsm.EventProcessor) *TestContext {
+	return &TestContext{ctx, eventProcessor, nil}
 }
 
 // Context returns the golang context for this context
@@ -36,7 +36,7 @@ func (tc *TestContext) Context() context.Context { return tc.ctx }
 //
 // - arguments don't match expected transition
 func (tc *TestContext) Event(event fsm.EventName, args ...interface{}) error {
-	evt, err := tc.eventmachine.Event(tc.ctx, event, nil, args...)
+	evt, err := tc.eventProcessor.Generate(tc.ctx, event, nil, args...)
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func (tc *TestContext) Event(event fsm.EventName, args ...interface{}) error {
 // transitions on the given state object. it will fail the test if any of them fail
 func (tc *TestContext) ReplayEvents(t *testing.T, user interface{}) {
 	for _, evt := range tc.dispatchedEvents {
-		_, err := tc.eventmachine.Apply(evt, user)
+		_, err := tc.eventProcessor.Apply(evt, user)
 		require.NoError(t, err)
 	}
 }

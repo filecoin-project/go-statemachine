@@ -8,15 +8,15 @@ import (
 	"golang.org/x/xerrors"
 )
 
-// EventMachine creates and applies events for go-statemachine based on the given event list
-type EventMachine interface {
+// EventProcessor creates and applies events for go-statemachine based on the given event list
+type EventProcessor interface {
 	// Event generates an event that can be dispatched to go-statemachine from the given event name and context args
-	Event(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (interface{}, error)
+	Generate(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (interface{}, error)
 	// Apply applies the given event from go-statemachine to the given state, based on transition rules
 	Apply(evt statemachine.Event, user interface{}) (EventName, error)
 }
 
-type eventMachine struct {
+type eventProcessor struct {
 	stateType     reflect.Type
 	stateKeyField StateKeyField
 	callbacks     map[EventName]callback
@@ -46,8 +46,8 @@ type fsmEvent struct {
 	returnChannel chan error
 }
 
-// NewEventMachine returns a new event machine for the given state and event list
-func NewEventMachine(state StateType, stateKeyField StateKeyField, events []EventBuilder) (EventMachine, error) {
+// NewEventProcessor returns a new event machine for the given state and event list
+func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []EventBuilder) (EventProcessor, error) {
 	stateType := reflect.TypeOf(state)
 	stateFieldType, ok := stateType.FieldByName(string(stateKeyField))
 	if !ok {
@@ -57,7 +57,7 @@ func NewEventMachine(state StateType, stateKeyField StateKeyField, events []Even
 		return nil, xerrors.Errorf("state field `%s` is not comparable", stateKeyField)
 	}
 
-	em := eventMachine{
+	em := eventProcessor{
 		stateType:     stateType,
 		stateKeyField: stateKeyField,
 		callbacks:     make(map[EventName]callback),
@@ -96,7 +96,7 @@ func NewEventMachine(state StateType, stateKeyField StateKeyField, events []Even
 }
 
 // Event generates an event that can be dispatched to go-statemachine from the given event name and context args
-func (em eventMachine) Event(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (interface{}, error) {
+func (em eventProcessor) Generate(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (interface{}, error) {
 	cb, ok := em.callbacks[event]
 	if !ok {
 		return fsmEvent{}, xerrors.Errorf("Unknown event `%+v`", event)
@@ -112,7 +112,7 @@ func (em eventMachine) Event(ctx context.Context, event EventName, returnChannel
 	return fsmEvent{event, args, ctx, returnChannel}, nil
 }
 
-func (em eventMachine) Apply(evt statemachine.Event, user interface{}) (EventName, error) {
+func (em eventProcessor) Apply(evt statemachine.Event, user interface{}) (EventName, error) {
 	userValue := reflect.ValueOf(user)
 	currentState := userValue.Elem().FieldByName(string(em.stateKeyField)).Interface()
 	e, ok := evt.User.(fsmEvent)

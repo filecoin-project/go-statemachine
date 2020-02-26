@@ -14,7 +14,7 @@ type Context interface {
 	// Context returns the golang context for this context
 	Context() context.Context
 
-	// Event initiates a state transition with the named event.
+	// Trigger initiates a state transition with the named event.
 	//
 	// The call takes a variable number of arguments that will be passed to the
 	// callback, if defined.
@@ -24,7 +24,7 @@ type Context interface {
 	// - event X does not exist
 	//
 	// - arguments don't match expected transition
-	Event(event EventName, args ...interface{}) error
+	Trigger(event EventName, args ...interface{}) error
 }
 
 // ActionFunc modifies the state further in addition
@@ -78,13 +78,13 @@ type StateType interface{}
 // Environment are externals dependencies will be needed by this particular state machine
 type Environment interface{}
 
-// StateHandler is called upon entering a state after
+// StateEntryFunc is called upon entering a state after
 // all events are processed. It should have the signature
-// func stateHandler<StateType, Environment>(ctx Context, environment Environment, state StateType) error
-type StateHandler interface{}
+// func stateEntryFunc<StateType, Environment>(ctx Context, environment Environment, state StateType) error
+type StateEntryFunc interface{}
 
-// StateHandlers is a map between states and their handlers
-type StateHandlers map[StateKey]StateHandler
+// StateEntryFuncs is a map between states and their handlers
+type StateEntryFuncs map[StateKey]StateEntryFunc
 
 // Notifier should be a function that takes two parameters,
 // a native event type and a statetype
@@ -139,9 +139,9 @@ type Parameters struct {
 	// See EventDesc for event properties
 	Events []EventBuilder
 
-	// StateHandlers - functions that will get called each time the machine enters a particular
+	// StateEntryFuncs - functions that will get called each time the machine enters a particular
 	// state. this is a map of state key -> handler.
-	StateHandlers StateHandlers
+	StateEntryFunc StateEntryFuncs
 
 	// optional
 

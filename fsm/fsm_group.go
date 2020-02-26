@@ -31,7 +31,7 @@ func New(ds datastore.Datastore, parameters Parameters) (Group, error) {
 // it will error if there are underlying state store errors or if the parameters
 // do not match what is expected for the event name
 func (s *stateGroup) Send(id interface{}, name EventName, args ...interface{}) (err error) {
-	evt, err := s.d.eventMachine.Event(context.TODO(), name, nil, args...)
+	evt, err := s.d.eventProcessor.Generate(context.TODO(), name, nil, args...)
 	if err != nil {
 		return err
 	}
@@ -43,7 +43,7 @@ func (s *stateGroup) Send(id interface{}, name EventName, args ...interface{}) (
 // do not match what is expected for the event name
 func (s *stateGroup) SendSync(ctx context.Context, id interface{}, name EventName, args ...interface{}) (err error) {
 	returnChannel := make(chan error, 1)
-	evt, err := s.d.eventMachine.Event(ctx, name, returnChannel, args...)
+	evt, err := s.d.eventProcessor.Generate(ctx, name, returnChannel, args...)
 	if err != nil {
 		return err
 	}
