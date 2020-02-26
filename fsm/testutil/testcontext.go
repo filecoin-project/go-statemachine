@@ -25,7 +25,7 @@ func NewTestContext(ctx context.Context, eventProcessor fsm.EventProcessor) *Tes
 // Context returns the golang context for this context
 func (tc *TestContext) Context() context.Context { return tc.ctx }
 
-// Event initiates a state transition with the named event.
+// Trigger initiates a state transition with the named event.
 //
 // The call takes a variable number of arguments that will be passed to the
 // callback, if defined.
@@ -35,7 +35,7 @@ func (tc *TestContext) Context() context.Context { return tc.ctx }
 // - event X does not exist
 //
 // - arguments don't match expected transition
-func (tc *TestContext) Event(event fsm.EventName, args ...interface{}) error {
+func (tc *TestContext) Trigger(event fsm.EventName, args ...interface{}) error {
 	evt, err := tc.eventProcessor.Generate(tc.ctx, event, nil, args...)
 	if err != nil {
 		return err
@@ -44,7 +44,7 @@ func (tc *TestContext) Event(event fsm.EventName, args ...interface{}) error {
 	return nil
 }
 
-// ReplayEvents will use the eventmachine to attempt to perform the dispatched
+// ReplayEvents will use the eventProcessor to attempt to perform the dispatched
 // transitions on the given state object. it will fail the test if any of them fail
 func (tc *TestContext) ReplayEvents(t *testing.T, user interface{}) {
 	for _, evt := range tc.dispatchedEvents {
@@ -52,3 +52,5 @@ func (tc *TestContext) ReplayEvents(t *testing.T, user interface{}) {
 		require.NoError(t, err)
 	}
 }
+
+var _ fsm.Context = &TestContext{}
