@@ -66,7 +66,12 @@ func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []Ev
 
 	// Build transition map and store sets of all events and states.
 	for _, evtIface := range events {
-		evt := evtIface.(eventBuilder)
+		evt, ok := evtIface.(eventBuilder)
+		if !ok {
+			errEvt := evtIface.(errBuilder)
+			return nil, errEvt.err
+		}
+
 		name := evt.name
 
 		_, exists := em.callbacks[name]

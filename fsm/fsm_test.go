@@ -158,6 +158,66 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.Nil(t, smm)
 		require.EqualError(t, err, "event `b` callback should return exactly one param that is an error")
 	})
+	t.Run("Event description has transition source twice", func(t *testing.T) {
+		smm, err := fsm.New(ds, fsm.Parameters{
+			Environment:   te,
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				fsm.Event("b").From(uint64(1)).To(uint64(2)).From(uint64(1)).To(uint64(0)),
+			},
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
+		})
+		require.Nil(t, smm)
+		require.EqualError(t, err, "duplicate transition source `1` for event `b`")
+	})
+	t.Run("Event description has overlapping transition source twice", func(t *testing.T) {
+		smm, err := fsm.New(ds, fsm.Parameters{
+			Environment:   te,
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				fsm.Event("b").FromMany(uint64(0), uint64(1)).To(uint64(2)).FromMany(uint64(2), uint64(1)).To(uint64(0)),
+			},
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
+		})
+		require.Nil(t, smm)
+		require.EqualError(t, err, "duplicate transition source `1` for event `b`")
+	})
+	t.Run("Event description has from any source twice", func(t *testing.T) {
+		smm, err := fsm.New(ds, fsm.Parameters{
+			Environment:   te,
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				fsm.Event("b").FromAny().To(uint64(2)).FromAny().To(uint64(0)),
+			},
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
+		})
+		require.Nil(t, smm)
+		require.EqualError(t, err, "duplicate all-sources destination for event `b`")
+	})
+	t.Run("Event description has callback defined twice", func(t *testing.T) {
+		smm, err := fsm.New(ds, fsm.Parameters{
+			Environment:   te,
+			StateType:     statemachine.TestState{},
+			StateKeyField: "A",
+			Events: fsm.Events{
+				fsm.Event("b").From(uint64(1)).To(uint64(2)).Action(func(*statemachine.TestState) error {
+					return nil
+				}).Action(func(*statemachine.TestState) error {
+					return nil
+				}),
+			},
+			StateEntryFunc: stateEntryFuncs,
+			Notifier:       nil,
+		})
+		require.Nil(t, smm)
+		require.EqualError(t, err, "duplicate action for event `b`")
+	})
 	t.Run("State Handler with bad stateKey", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
 			Environment:   te,
