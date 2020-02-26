@@ -78,10 +78,6 @@ func (fsm *StateMachine) run() {
 			} else {
 				pendingEvents = nil
 			}
-			if nextStep == nil {
-				atomic.StoreInt32(&fsm.busy, 0)
-				continue
-			}
 
 			ctx := Context{
 				ctx: context.TODO(),
@@ -91,13 +87,14 @@ func (fsm *StateMachine) run() {
 			}
 
 			go func() {
-				res := reflect.ValueOf(nextStep).Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(ustate).Elem()})
+				if nextStep != nil {
+					res := reflect.ValueOf(nextStep).Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(ustate).Elem()})
 
-				if res[0].Interface() != nil {
-					log.Errorf("executing step: %+v", res[0].Interface().(error)) // TODO: propagate top level
-					return
+					if res[0].Interface() != nil {
+						log.Errorf("executing step: %+v", res[0].Interface().(error)) // TODO: propagate top level
+						return
+					}
 				}
-
 				atomic.StoreInt32(&fsm.busy, 0)
 				fsm.stageDone <- struct{}{}
 			}()
