@@ -277,8 +277,12 @@ func TestNoStateCallback(t *testing.T) {
 	defer cancel()
 	ds := datastore.NewMapDatastore()
 
-	th := &testHandlerNoStateCB{t: t, done: make(chan struct{})}
+	th := &testHandlerNoStateCB{t: t, proceed: make(chan struct{}), done: make(chan struct{})}
 	smm := New(ds, th, TestState{})
+
+	if err := smm.Send(uint64(2), &TestEvent{A: "block"}); err != nil {
+		t.Fatalf("%+v", err)
+	}
 
 	if err := smm.Send(uint64(2), &TestEvent{A: "start"}); err != nil {
 		t.Fatalf("%+v", err)
@@ -288,6 +292,7 @@ func TestNoStateCallback(t *testing.T) {
 		t.Fatalf("%+v", err)
 	}
 
+	close(th.proceed)
 	select {
 	case <-ctx.Done():
 		t.Fatal("Second event transition not processed")
@@ -296,8 +301,9 @@ func TestNoStateCallback(t *testing.T) {
 }
 
 type testHandlerNoStateCB struct {
-	t    *testing.T
-	done chan struct{}
+	t       *testing.T
+	proceed chan struct{}
+	done    chan struct{}
 }
 
 func (t *testHandlerNoStateCB) Plan(events []Event, state interface{}) (interface{}, uint64, error) {
@@ -317,6 +323,8 @@ func (t *testHandlerNoStateCB) plan(events []Event, state *TestState) (func(Cont
 	case "b":
 		state.A = 2
 		state.B = e.Val
+	case "block":
+		state.A = 3
 	}
 
 	switch state.A {
@@ -324,10 +332,17 @@ func (t *testHandlerNoStateCB) plan(events []Event, state *TestState) (func(Cont
 		return nil, uint64(1), nil
 	case 2:
 		return t.step1, uint64(1), nil
+	case 3:
+		return t.block, uint64(1), nil
 	default:
 		t.t.Fatal(state.A)
 	}
 	panic("how?")
+}
+
+func (t *testHandlerNoStateCB) block(ctx Context, st TestState) error {
+	<-t.proceed
+	return nil
 }
 
 func (t *testHandlerNoStateCB) step1(ctx Context, st TestState) error {
