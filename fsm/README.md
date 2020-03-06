@@ -8,6 +8,8 @@ A well defined DSL for constructing finite state machines for use in Filecoin.
 * [Background Reading](./README.md#background-reading)
 * [Description](./README.md#description)
 * [Usage](./README.md#usage)
+* [Interaction With Statestore](./README.md#interaction-with-statestore)
+* [License](./README.md#license)
 
 ## Background Reading
 
@@ -161,7 +163,7 @@ var DealFSMParameters = fsm.Parameters{
 }
 ```
 
-## Interaction with go-statestore
+## Interaction with statestore
 
 The FSM module is designed to be used with a list of data structures, persisted to a datastore through the `go-statestore` module.
 
@@ -178,7 +180,7 @@ You can now dispatch events from the outside to a particular deal FSM with:
 ```golang
 var DealID // some identifier of a deal
 var proposal DealProposal
-fsm.Send(DealID, "ReceivedNewDeal", proposal)
+dealStateMachines.Send(DealID, "ReceivedNewDeal", proposal)
 ```
 
 The statemachine will initialize a new FSM if it is not already tracking data for the given identifier (the first parameter -- in this case a deal ID)
