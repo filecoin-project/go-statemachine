@@ -3,6 +3,7 @@ package fsm_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log"
@@ -35,13 +36,13 @@ var events = fsm.Events{
 	),
 	fsm.Event("resume").FromMany(uint64(1), uint64(2)).ToNoChange(),
 	fsm.Event("any").FromAny().To(uint64(1)),
+	fsm.Event("finish").FromAny().To(uint64(3)),
 }
 
 var stateEntryFuncs = fsm.StateEntryFuncs{
 
 	uint64(1): func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
-		err := ctx.Trigger("b", uint64(55))
-		assert.NilError(te.t, err)
+		_ = ctx.Trigger("b", uint64(55))
 		<-te.proceed
 		return nil
 	},
@@ -340,6 +341,7 @@ func newFsm(ds datastore.Datastore, te *testEnvironment) (fsm.Group, error) {
 		StateKeyField:   "A",
 		Events:          events,
 		StateEntryFuncs: stateEntryFuncs,
+		FinalityStates:  []fsm.StateKey{uint64(3)},
 		Notifier:        nil,
 	}
 	return fsm.New(ds, defaultFsmParams)
@@ -503,4 +505,49 @@ func TestAllStateEvent(t *testing.T) {
 	err = smm.Send(uint64(2), "any")
 	require.NoError(t, err)
 	<-te.done
+}
+
+func TestFinalityStates(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
+	ds := datastore.NewMapDatastore()
+
+	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+	smm, err := newFsm(ds, te)
+
+	require.NoError(t, err)
+
+	err = smm.Send(uint64(2), "start")
+	require.NoError(t, err)
+
+	require.True(t, smm.IsRunning(uint64(2)))
+
+	var testState statemachine.TestState
+	st := smm.Get(uint64(2))
+	err = st.Get(&testState)
+	require.NoError(t, err)
+
+	require.False(t, smm.IsTerminated(testState))
+
+	close(te.proceed)
+	<-te.done
+
+	err = smm.SendSync(ctx, uint64(2), "finish")
+	require.NoError(t, err)
+	st = smm.Get(uint64(2))
+	err = st.Get(&testState)
+	require.NoError(t, err)
+
+	require.True(t, smm.IsTerminated(testState))
+
+	err = smm.SendSync(ctx, uint64(2), "any")
+	require.EqualError(t, err, statemachine.ErrTerminated.Error())
+
+	st = smm.Get(uint64(2))
+	err = st.Get(&testState)
+	require.NoError(t, err)
+
+	require.True(t, smm.IsTerminated(testState))
 }

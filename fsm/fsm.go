@@ -18,6 +18,7 @@ type fsmHandler struct {
 	eventProcessor  EventProcessor
 	stateEntryFuncs StateEntryFuncs
 	environment     Environment
+	finalityStates  map[StateKey]struct{}
 }
 
 // NewFSMHandler defines an StateHandler for go-statemachine that implements
@@ -45,6 +46,7 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 		eventProcessor:  eventProcessor,
 		stateEntryFuncs: make(StateEntryFuncs),
 		notifier:        parameters.Notifier,
+		finalityStates:  make(map[StateKey]struct{}),
 	}
 
 	// type check state handlers
@@ -57,6 +59,10 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 			return nil, err
 		}
 		d.stateEntryFuncs[state] = stateEntryFunc
+	}
+
+	for _, finalityState := range parameters.FinalityStates {
+		d.finalityStates[finalityState] = struct{}{}
 	}
 
 	return d, nil
@@ -72,17 +78,33 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 // At the end it executes the specified handler for the final state,
 // if specified
 func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interface{}, uint64, error) {
+	userValue := reflect.ValueOf(user)
+	if d.reachedFinalityState(userValue.Elem().Interface()) {
+		d.eventProcessor.ClearEvents(events, statemachine.ErrTerminated)
+		return nil, uint64(len(events)), statemachine.ErrTerminated
+	}
 	eventName, err := d.eventProcessor.Apply(events[0], user)
 	if err != nil {
 		log.Errorf("Executing event planner failed: %+v", err)
 		return nil, 1, nil
 	}
-	userValue := reflect.ValueOf(user)
 	currentState := userValue.Elem().FieldByName(string(d.stateKeyField)).Interface()
 	if d.notifier != nil {
 		d.notifier(eventName, userValue.Elem().Interface())
 	}
+	_, final := d.finalityStates[currentState]
+	if final {
+		d.eventProcessor.ClearEvents(events[1:], statemachine.ErrTerminated)
+		return nil, uint64(len(events)), statemachine.ErrTerminated
+	}
 	return d.handler(d.stateEntryFuncs[currentState]), 1, nil
+}
+
+func (d fsmHandler) reachedFinalityState(user interface{}) bool {
+	userValue := reflect.ValueOf(user)
+	currentState := userValue.FieldByName(string(d.stateKeyField)).Interface()
+	_, final := d.finalityStates[currentState]
+	return final
 }
 
 // handler makes a state next step function from the given callback
