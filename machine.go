@@ -6,11 +6,14 @@ import (
 	"sync/atomic"
 
 	"github.com/filecoin-project/go-statestore"
+	xerrors "golang.org/x/xerrors"
 
 	logging "github.com/ipfs/go-log"
 )
 
 var log = logging.Logger("evtsm")
+
+var ErrTerminated = xerrors.New("normal shutdown of state machine")
 
 type Event struct {
 	User interface{}
@@ -22,6 +25,7 @@ type Event struct {
 // 2. the number of events processed
 // 3. an error if occured
 type Planner func(events []Event, user interface{}) (interface{}, uint64, error)
+type Finisher func(name interface{}, err error)
 
 type StateMachine struct {
 	planner  Planner
@@ -35,11 +39,19 @@ type StateMachine struct {
 	closing   chan struct{}
 	closed    chan struct{}
 
+	finisher Finisher
+
 	busy int32
 }
 
 func (fsm *StateMachine) run() {
-	defer close(fsm.closed)
+	var lastErr error
+	defer func() {
+		close(fsm.closed)
+		if fsm.finisher != nil {
+			fsm.finisher(fsm.name, lastErr)
+		}
+	}()
 
 	var pendingEvents []Event
 
@@ -62,14 +74,21 @@ func (fsm *StateMachine) run() {
 			var nextStep interface{}
 			var ustate interface{}
 			var processed uint64
-
+			var terminated bool
 			err := fsm.mutateUser(func(user interface{}) (err error) {
 				nextStep, processed, err = fsm.planner(pendingEvents, user)
 				ustate = user
+				if xerrors.Is(err, ErrTerminated) {
+					terminated = true
+					return nil
+				}
 				return err
 			})
+			if terminated {
+				return
+			}
 			if err != nil {
-				log.Errorf("Executing event planner failed: %+v", err)
+				lastErr = err
 				return
 			}
 
@@ -115,8 +134,12 @@ func (fsm *StateMachine) mutateUser(cb func(user interface{}) error) error {
 }
 
 func (fsm *StateMachine) send(evt Event) error {
-	fsm.eventsIn <- evt // TODO: ctx, at least
-	return nil
+	select {
+	case <-fsm.closed:
+		return ErrTerminated
+	case fsm.eventsIn <- evt: // TODO: ctx, at least
+		return nil
+	}
 }
 
 func (fsm *StateMachine) stop(ctx context.Context) error {

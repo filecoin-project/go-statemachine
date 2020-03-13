@@ -10,9 +10,16 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// StateHandler is any struct that implementings a plan function
 type StateHandler interface {
 	// returns
 	Plan(events []Event, user interface{}) (interface{}, uint64, error)
+}
+
+var defaultFinisher Finisher = func(id interface{}, err error) {
+	if err != nil {
+		log.Errorf("FSM Errored During Operation: %w", err)
+	}
 }
 
 // StateGroup manages a group of state machines sharing the same logic
@@ -20,8 +27,9 @@ type StateGroup struct {
 	sts       *statestore.StateStore
 	hnd       StateHandler
 	stateType reflect.Type
+	finisher  Finisher
 
-	lk  sync.Mutex
+	lk  sync.RWMutex
 	sms map[datastore.Key]*StateMachine
 }
 
@@ -30,6 +38,7 @@ func New(ds datastore.Datastore, hnd StateHandler, stateType interface{}) *State
 	return &StateGroup{
 		sts:       statestore.New(ds),
 		hnd:       hnd,
+		finisher:  defaultFinisher,
 		stateType: reflect.TypeOf(stateType),
 
 		sms: map[datastore.Key]*StateMachine{},
@@ -102,9 +111,9 @@ func (s *StateGroup) loadOrCreate(name interface{}, userState interface{}) (*Sta
 	}
 
 	res := &StateMachine{
-		planner:  s.hnd.Plan,
-		eventsIn: make(chan Event),
-
+		planner:   s.hnd.Plan,
+		eventsIn:  make(chan Event),
+		finisher:  s.finish,
 		name:      name,
 		st:        s.sts.Get(name),
 		stateType: s.stateType,
@@ -119,6 +128,13 @@ func (s *StateGroup) loadOrCreate(name interface{}, userState interface{}) (*Sta
 	return res, nil
 }
 
+func (s *StateGroup) finish(name interface{}, err error) {
+	s.lk.Lock()
+	delete(s.sms, statestore.ToKey(name))
+	s.lk.Unlock()
+	s.finisher(name, err)
+}
+
 // Stop stops all state machines in this group
 func (s *StateGroup) Stop(ctx context.Context) error {
 	s.lk.Lock()
@@ -131,6 +147,19 @@ func (s *StateGroup) Stop(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// IsRunning returns true if there is a running statemachine
+// for the given identifier
+func (s *StateGroup) IsRunning(id interface{}) bool {
+	s.lk.RLock()
+	defer s.lk.RUnlock()
+	_, running := s.sms[statestore.ToKey(id)]
+	return running
+}
+
+func (s *StateGroup) SetOnShutdownHandler(finisher Finisher) {
+	s.finisher = finisher
 }
 
 // List outputs states of all state machines in this group
