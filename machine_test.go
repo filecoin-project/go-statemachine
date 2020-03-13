@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ipfs/go-datastore"
-	dss "github.com/ipfs/go-datastore/sync"
 	logging "github.com/ipfs/go-log"
 	"gotest.tools/assert"
 )
@@ -353,76 +352,6 @@ func (t *testHandlerNoStateCB) step1(ctx Context, st TestState) error {
 	return nil
 }
 
-func TestShutdowns(t *testing.T) {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	ds := dss.MutexWrap(datastore.NewMapDatastore())
-	finishes := make(chan uint64)
-	th := &testHandlerWithFinish{t: t}
-	smm := New(ds, th, TestState{})
-	smm.SetOnShutdownHandler(func(id interface{}, err error) {
-		num, ok := id.(uint64)
-		if ok {
-			finishes <- num
-		}
-	})
-	for i := 0; i < 100; i++ {
-		smm.Send(uint64(i), &TestEvent{A: "start"})
-	}
-	for i := 0; i < 100; i++ {
-		assert.Equal(t, true, smm.IsRunning(uint64(i)))
-	}
-	for i := 0; i < 100; i++ {
-		smm.Send(uint64(i), &TestEvent{A: "finish"})
-	}
-	finishedMachines := make(map[uint64]struct{})
-	for len(finishedMachines) < 100 {
-		select {
-		case next := <-finishes:
-			finishedMachines[next] = struct{}{}
-		case <-ctx.Done():
-			t.Fatal("did not terminate all routines")
-		}
-	}
-	for i := 0; i < 100; i++ {
-		assert.Equal(t, false, smm.IsRunning(uint64(i)))
-	}
-	for i := 0; i < 100; i++ {
-		var te TestState
-		st := smm.Get(uint64(i))
-		err := st.Get(&te)
-		assert.NilError(t, err)
-		assert.Equal(t, te.A, uint64(3))
-	}
-}
-
-type testHandlerWithFinish struct {
-	t        *testing.T
-	finishes chan uint64
-}
-
-func (t *testHandlerWithFinish) Plan(events []Event, state interface{}) (interface{}, uint64, error) {
-	cb, processed, err := t.plan(events, state.(*TestState))
-	if cb == nil {
-		return nil, processed, err
-	}
-	return cb, processed, err
-}
-
-func (t *testHandlerWithFinish) plan(events []Event, state *TestState) (func(Context, TestState) error, uint64, error) {
-	for _, event := range events {
-		e := event.User.(*TestEvent)
-		switch e.A {
-		case "finish":
-			state.A = 3
-			return nil, uint64(len(events)), ErrTerminated
-		}
-	}
-	return nil, uint64(len(events)), nil
-}
-
 var _ StateHandler = &testHandler{}
 var _ StateHandler = &testHandlerPartial{}
 var _ StateHandler = &testHandlerNoStateCB{}
-var _ StateHandler = &testHandlerWithFinish{}
