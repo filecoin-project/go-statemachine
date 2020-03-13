@@ -522,8 +522,6 @@ func TestFinalityStates(t *testing.T) {
 	err = smm.Send(uint64(2), "start")
 	require.NoError(t, err)
 
-	require.True(t, smm.IsRunning(uint64(2)))
-
 	var testState statemachine.TestState
 	st := smm.Get(uint64(2))
 	err = st.Get(&testState)

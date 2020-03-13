@@ -116,10 +116,6 @@ type Group interface {
 	// out: *[]StateT
 	List(out interface{}) error
 
-	// IsRunning returns true if there is a running statemachine
-	// for the given identifier
-	IsRunning(id interface{}) bool
-
 	// IsTerminated returns true if a StateType is in a FinalityState
 	IsTerminated(out StateType) bool
 

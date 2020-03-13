@@ -25,7 +25,6 @@ type Event struct {
 // 2. the number of events processed
 // 3. an error if occured
 type Planner func(events []Event, user interface{}) (interface{}, uint64, error)
-type Finisher func(name interface{}, err error)
 
 type StateMachine struct {
 	planner  Planner
@@ -39,19 +38,11 @@ type StateMachine struct {
 	closing   chan struct{}
 	closed    chan struct{}
 
-	finisher Finisher
-
 	busy int32
 }
 
 func (fsm *StateMachine) run() {
-	var lastErr error
-	defer func() {
-		close(fsm.closed)
-		if fsm.finisher != nil {
-			fsm.finisher(fsm.name, lastErr)
-		}
-	}()
+	defer close(fsm.closed)
 
 	var pendingEvents []Event
 
@@ -75,6 +66,7 @@ func (fsm *StateMachine) run() {
 			var ustate interface{}
 			var processed uint64
 			var terminated bool
+
 			err := fsm.mutateUser(func(user interface{}) (err error) {
 				nextStep, processed, err = fsm.planner(pendingEvents, user)
 				ustate = user
@@ -88,7 +80,7 @@ func (fsm *StateMachine) run() {
 				return
 			}
 			if err != nil {
-				lastErr = err
+				log.Errorf("Executing event planner failed: %+v", err)
 				return
 			}
 
