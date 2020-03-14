@@ -22,8 +22,8 @@ This library provides a way to model a Filecoin process that operates on a speci
 
 A state machine is defined in terms of
 
-- StateType -- the type of data structure we are tracking (should be a struct)
-- StateKeyField -- the field in the data structure that represents the unique identifier for the current state. Must be a field that is comparable in golang (i.e. not an array or map)
+- `StateType` -- the type of data structure we are tracking (should be a struct)
+- `StateKeyField` -- the field in the data structure that represents the unique identifier for the current state. Must be a field that is comparable in golang (i.e. not an array or map)
 - `Events` -- Events are the list of inputs that trigger transitions in state. An event is defined in terms of:
   - An identifier
   - A mapping between source states and destination states -- events can apply to one, many, or all source states. When there is more than one source state, the source states can share or have different destination states
@@ -34,7 +34,7 @@ A state machine is defined in terms of
 
 ## Usage
 
-Let's consider a hypothetical deal we want to track in Filecoin. Each deal will have a series of states it can be in, and various things that can happen to change its state. We will track multiple deals at the same time. In this example, we will model the actions of the receiving party (i.e. the person who accepted the deal and responding)
+Let's consider a hypothetical deal we want to track in Filecoin. Each deal will have a series of states it can be in, and various things that can happen to change its state. We will track multiple deals at the same time. In this example, we will model the actions of the receiving party (i.e. the person who accepted the deal and is responding)
 
 Here' is the simplified deal structure:
 
@@ -58,7 +58,7 @@ type DealState struct {
 Let's pretend our ideal deal flow looks like:
 
 ```
-Receive new deal proposal -> Validate proposal-> For All Data Requested, Send a chunk, then request payment, then wait for payment before sending more -> Complete deal
+Receive new deal proposal -> Validate proposal -> For All Data Requested, Send a chunk, then request payment, then wait for payment before sending more -> Complete deal
 ```
 
 You can imagine at each state in this happy path, things could go wrong. A deal proposal might need to be rejected for not meeting criteria. A network message could fail to send. A client could send only a partial payment, or one that fails to process. We might had an error reading our own data.
@@ -69,7 +69,7 @@ You can start to assemble different events that might happen in this process:
 ReceivedNewDeal
 AcceptedDeal
 RejectedDeal
-SentBlocks
+SentData
 RequestedPayment
 ReceivedPayment
 ...

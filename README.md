@@ -26,14 +26,14 @@ A state machine is defined in terms of a Planner.
 It has the following signature:
 
 ```golang
-type Planner func(events []Event, user interface{}) (interface{}, uint64, error)
+type Planner func(events []Event, user interface{}) (nextActions interface{}, eventsProcessed uint64, err error)
 ```
 
-A planner receives a series of events and a point to the current state (represented by user)
+A planner receives a series of events and a pointer to the current state (represented by user)
 
 The planner generally:
 - processes one or more events that mutate state
-- constructs a function that will perform additional functions based on the new state
+- constructs a function that will perform additional actions based on the new state
 
 It returns:
 1. The next actions handler-- should have the signature func(ctx Context, st <T>) error), where <T> is the typeOf(user) param
@@ -60,7 +60,7 @@ This creates a machine for the given data store that will process data of type `
 You can now dispatch events to a state machine with:
 
 ```golang
-var id interface{} // some identifier of a deal
+var id interface{} // some identifier of a tracked state
 var evt Event // some event type
 stateMachines.Send(id, evt)
 ```
