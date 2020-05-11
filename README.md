@@ -2,7 +2,6 @@
 
 A generic state machine
 
-
 ## Table of Contents
 
 * [Description](./README.md#description)

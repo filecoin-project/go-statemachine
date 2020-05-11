@@ -38,6 +38,11 @@ func (s *stateGroup) Send(id interface{}, name EventName, args ...interface{}) (
 	return s.StateGroup.Send(id, evt)
 }
 
+// IsTerminated returns true if a StateType is in a FinalityState
+func (s *stateGroup) IsTerminated(out StateType) bool {
+	return s.d.reachedFinalityState(out)
+}
+
 // SendSync sends the given event name and parameters to the state specified by id
 // it will error if there are underlying state store errors or if the parameters
 // do not match what is expected for the event name

@@ -31,6 +31,7 @@ A state machine is defined in terms of
 - `StateEntryFuncs` - State entry functions are handlers that get called when the FSM enters a specific state. Where Actions are associated with specific events, state entry funcs are associated with specific states. Actions can modify the underlying data structure. StateEntryFuncs can only trigger additional events if they wish to modify the state (a state entry func receives a dereferenced value for the data structure, rather than the pointer)
 - `Environment` - This is a single interface that is used to access external dependencies. It is available to a `StateEntryFunc`
 - `Notifier` - A function that gets called on each successfully applied state transition, before any state entry func is called. This is useful for providing external notifications about state updates. It is called with the name of the event applied and the current state of the data structure.
+- `FinalityStates` - a list of states from which the state machine cannot leave. When the statemachine enters these states, it shuts down and stops receiving messages.
 
 ## Usage
 
@@ -160,6 +161,7 @@ var DealFSMParameters = fsm.Parameters{
   Events: DealEvents,
   StateEntryFuncs: DealEntryFuncs,
   Environment: DealEnvironmentImplementation{}
+  FinalityStates: []StateKey{"Completed", "Failed"} 
 }
 ```
 

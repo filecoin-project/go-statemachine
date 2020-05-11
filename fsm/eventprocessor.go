@@ -14,6 +14,8 @@ type EventProcessor interface {
 	Generate(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (interface{}, error)
 	// Apply applies the given event from go-statemachine to the given state, based on transition rules
 	Apply(evt statemachine.Event, user interface{}) (EventName, error)
+	// ClearEvents clears out events that are synchronous with the given error message
+	ClearEvents(evts []statemachine.Event, err error)
 }
 
 type eventProcessor struct {
@@ -142,6 +144,15 @@ func (em eventProcessor) Apply(evt statemachine.Event, user interface{}) (EventN
 	}
 
 	return e.name, completeEvent(e, nil)
+}
+
+func (em eventProcessor) ClearEvents(evts []statemachine.Event, err error) {
+	for _, evt := range evts {
+		fsmEvt, ok := evt.User.(fsmEvent)
+		if ok {
+			_ = completeEvent(fsmEvt, err)
+		}
+	}
 }
 
 // Apply applies the given event from go-statemachine to the given state, based on transition rules

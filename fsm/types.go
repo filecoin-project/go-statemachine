@@ -116,6 +116,9 @@ type Group interface {
 	// out: *[]StateT
 	List(out interface{}) error
 
+	// IsTerminated returns true if a StateType is in a FinalityState
+	IsTerminated(out StateType) bool
+
 	// Stop stops all state machines in this group
 	Stop(ctx context.Context) error
 }
@@ -148,4 +151,8 @@ type Parameters struct {
 	// Notifier is a function that gets called on every successful event processing
 	// with the event name and the new state
 	Notifier Notifier
+
+	// FinalityStates are states in which the statemachine will shut down,
+	// stop calling handlers and stop processing events
+	FinalityStates []StateKey
 }
