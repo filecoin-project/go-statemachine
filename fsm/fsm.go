@@ -90,7 +90,7 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 	}
 	currentState := userValue.Elem().FieldByName(string(d.stateKeyField)).Interface()
 	if d.notifier != nil {
-		d.notifier(eventName, userValue.Elem().Interface())
+		go d.notifier(eventName, userValue.Elem().Interface())
 	}
 	_, final := d.finalityStates[currentState]
 	if final {
