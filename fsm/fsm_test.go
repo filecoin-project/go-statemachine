@@ -2,6 +2,8 @@ package fsm_test
 
 import (
 	"context"
+	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -466,6 +468,51 @@ func TestNotification(t *testing.T) {
 	<-te.done
 
 	require.Equal(t, notifications, 2)
+}
+
+func TestSerialNotification(t *testing.T) {
+	eventNames := []string{"alpha", "beta", "gamma", "delta", "epsilon"}
+
+	events := fsm.Events{}
+	for _, eventName := range eventNames {
+		events = append(events, fsm.Event(eventName).FromAny().ToNoChange())
+	}
+
+	te := &testEnvironment{t: t}
+
+	var notifications []string
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(events))
+
+	var notifier fsm.Notifier = func(eventName fsm.EventName, state fsm.StateType) {
+		time.Sleep(time.Duration(rand.Int31n(100)) * time.Millisecond)
+		notifications = append(notifications, eventName.(string))
+		wg.Done()
+	}
+
+	ds := datastore.NewMapDatastore()
+	params := fsm.Parameters{
+		Environment:     te,
+		StateType:       statemachine.TestState{},
+		StateKeyField:   "A",
+		Events:          events,
+		StateEntryFuncs: fsm.StateEntryFuncs{},
+		Notifier:        notifier,
+	}
+	smm, err := fsm.New(ds, params)
+	require.NoError(t, err)
+
+	// send all the events in order
+	for _, eventName := range eventNames {
+		err = smm.Send(uint64(2), eventName)
+		require.NoError(t, err)
+	}
+
+	wg.Wait()
+
+	// Expect that notifications happened in the order that the events happened
+	require.Equal(t, eventNames, notifications)
 }
 
 func TestNoChangeHandler(t *testing.T) {

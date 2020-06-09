@@ -15,10 +15,18 @@ type fsmHandler struct {
 	stateType       reflect.Type
 	stateKeyField   StateKeyField
 	notifier        Notifier
+	notifications   chan notification
 	eventProcessor  EventProcessor
 	stateEntryFuncs StateEntryFuncs
 	environment     Environment
 	finalityStates  map[StateKey]struct{}
+}
+
+const NotificationQueueSize = 128
+
+type notification struct {
+	eventName EventName
+	state     StateType
 }
 
 // NewFSMHandler defines an StateHandler for go-statemachine that implements
@@ -65,6 +73,8 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 		d.finalityStates[finalityState] = struct{}{}
 	}
 
+	d.initNotifier()
+
 	return d, nil
 }
 
@@ -90,7 +100,7 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 	}
 	currentState := userValue.Elem().FieldByName(string(d.stateKeyField)).Interface()
 	if d.notifier != nil {
-		go d.notifier(eventName, userValue.Elem().Interface())
+		d.notifications <- notification{eventName, userValue.Elem().Interface()}
 	}
 	_, final := d.finalityStates[currentState]
 	if final {
@@ -105,6 +115,20 @@ func (d fsmHandler) reachedFinalityState(user interface{}) bool {
 	currentState := userValue.FieldByName(string(d.stateKeyField)).Interface()
 	_, final := d.finalityStates[currentState]
 	return final
+}
+
+// initNotifier will start up a goroutine which processes the notification queue
+// in order
+func (d *fsmHandler) initNotifier() {
+	if d.notifier != nil {
+		d.notifications = make(chan notification, NotificationQueueSize)
+
+		go func() {
+			for n := range d.notifications {
+				d.notifier(n.eventName, n.state)
+			}
+		}()
+	}
 }
 
 // handler makes a state next step function from the given callback
