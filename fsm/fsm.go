@@ -73,7 +73,9 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 		d.finalityStates[finalityState] = struct{}{}
 	}
 
-	d.initNotifier()
+	if d.notifier != nil {
+		d.notifications = make(chan notification, NotificationQueueSize)
+	}
 
 	return d, nil
 }
@@ -117,15 +119,18 @@ func (d fsmHandler) reachedFinalityState(user interface{}) bool {
 	return final
 }
 
-// initNotifier will start up a goroutine which processes the notification queue
+// Init will start up a goroutine which processes the notification queue
 // in order
-func (d *fsmHandler) initNotifier() {
+func (d fsmHandler) Init(onClosing <-chan struct{}) {
 	if d.notifier != nil {
-		d.notifications = make(chan notification, NotificationQueueSize)
-
 		go func() {
-			for n := range d.notifications {
-				d.notifier(n.eventName, n.state)
+			for {
+				select {
+				case n := <-d.notifications:
+					d.notifier(n.eventName, n.state)
+				case <-onClosing:
+					return
+				}
 			}
 		}()
 	}

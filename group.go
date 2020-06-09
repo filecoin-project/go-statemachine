@@ -15,6 +15,11 @@ type StateHandler interface {
 	Plan(events []Event, user interface{}) (interface{}, uint64, error)
 }
 
+type StateHandlerWithInit interface {
+	StateHandler
+	Init(<-chan struct{})
+}
+
 // StateGroup manages a group of state machines sharing the same logic
 type StateGroup struct {
 	sts       *statestore.StateStore
@@ -114,6 +119,10 @@ func (s *StateGroup) loadOrCreate(name interface{}, userState interface{}) (*Sta
 		closed:    make(chan struct{}),
 	}
 
+	initter, ok := s.hnd.(StateHandlerWithInit)
+	if ok {
+		initter.Init(res.closed)
+	}
 	go res.run()
 
 	return res, nil

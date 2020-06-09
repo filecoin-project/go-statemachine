@@ -352,6 +352,95 @@ func (t *testHandlerNoStateCB) step1(ctx Context, st TestState) error {
 	return nil
 }
 
+type testHandlerWithGoRoutine struct {
+	t         *testing.T
+	event     chan struct{}
+	proceed   chan struct{}
+	done      chan struct{}
+	notifDone chan struct{}
+	count     uint64
+}
+
+func (t *testHandlerWithGoRoutine) Plan(events []Event, state interface{}) (interface{}, uint64, error) {
+	return t.plan(events, state.(*TestState))
+}
+
+func (t *testHandlerWithGoRoutine) Init(onClose <-chan struct{}) {
+	go func() {
+		for {
+			select {
+			case <-t.event:
+				t.count++
+			case <-onClose:
+				close(t.notifDone)
+				return
+			}
+		}
+	}()
+}
+
+func (t *testHandlerWithGoRoutine) plan(events []Event, state *TestState) (func(Context, TestState) error, uint64, error) {
+	for _, event := range events {
+		e := event.User.(*TestEvent)
+		switch e.A {
+		case "restart":
+		case "start":
+			state.A = 1
+		case "b":
+			state.A = 2
+			state.B = e.Val
+		}
+	}
+
+	t.event <- struct{}{}
+	switch state.A {
+	case 1:
+		return t.step0, uint64(len(events)), nil
+	case 2:
+		return t.step1, uint64(len(events)), nil
+	default:
+		t.t.Fatal(state.A)
+	}
+	panic("how?")
+}
+
+func (t *testHandlerWithGoRoutine) step0(ctx Context, st TestState) error {
+	ctx.Send(&TestEvent{A: "b", Val: 55}) // nolint: errcheck
+	<-t.proceed
+	return nil
+}
+
+func (t *testHandlerWithGoRoutine) step1(ctx Context, st TestState) error {
+	assert.Equal(t.t, uint64(2), st.A)
+
+	close(t.done)
+	return nil
+}
+
+func TestInit(t *testing.T) {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	for i := 0; i < 1000; i++ { // run a few times to expose any races
+		ds := datastore.NewMapDatastore()
+
+		th := &testHandlerWithGoRoutine{t: t, event: make(chan struct{}), notifDone: make(chan struct{}), done: make(chan struct{}), proceed: make(chan struct{})}
+		close(th.proceed)
+		smm := New(ds, th, TestState{})
+
+		if err := smm.Send(uint64(2), &TestEvent{A: "start"}); err != nil {
+			t.Fatalf("%+v", err)
+		}
+
+		<-th.done
+		smm.Stop(ctx)
+		<-th.notifDone
+		assert.Equal(t, uint64(2), th.count)
+	}
+
+}
+
 var _ StateHandler = &testHandler{}
 var _ StateHandler = &testHandlerPartial{}
 var _ StateHandler = &testHandlerNoStateCB{}
+var _ StateHandler = &testHandlerWithGoRoutine{}
