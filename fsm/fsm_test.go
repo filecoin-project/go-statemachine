@@ -2,7 +2,7 @@ package fsm_test
 
 import (
 	"context"
-	"math/rand"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -471,7 +471,12 @@ func TestNotification(t *testing.T) {
 }
 
 func TestSerialNotification(t *testing.T) {
-	eventNames := []string{"alpha", "beta", "gamma", "delta", "epsilon"}
+	eventNames := []string{}
+
+	// Generate a slew of events that will occur in sequential order
+	for i := 0; i < 1000; i++ {
+		eventNames = append(eventNames, fmt.Sprintf("%04d", i))
+	}
 
 	events := fsm.Events{}
 	for _, eventName := range eventNames {
@@ -486,7 +491,6 @@ func TestSerialNotification(t *testing.T) {
 	wg.Add(len(events))
 
 	var notifier fsm.Notifier = func(eventName fsm.EventName, state fsm.StateType) {
-		time.Sleep(time.Duration(rand.Int31n(100)) * time.Millisecond)
 		notifications = append(notifications, eventName.(string))
 		wg.Done()
 	}
