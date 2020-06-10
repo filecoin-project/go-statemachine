@@ -433,7 +433,8 @@ func TestInit(t *testing.T) {
 		}
 
 		<-th.done
-		smm.Stop(ctx)
+		err := smm.Stop(ctx)
+		assert.NilError(t, err)
 		<-th.notifDone
 		assert.Equal(t, uint64(2), th.count)
 	}
