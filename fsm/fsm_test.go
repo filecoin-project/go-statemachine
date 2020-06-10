@@ -488,9 +488,11 @@ func TestSerialNotification(t *testing.T) {
 	var notifications []string
 
 	wg := sync.WaitGroup{}
+	handleNotifications := make(chan struct{})
 	wg.Add(len(events))
 
 	var notifier fsm.Notifier = func(eventName fsm.EventName, state fsm.StateType) {
+		<-handleNotifications
 		notifications = append(notifications, eventName.(string))
 		wg.Done()
 	}
@@ -512,7 +514,7 @@ func TestSerialNotification(t *testing.T) {
 		err = smm.Send(uint64(2), eventName)
 		require.NoError(t, err)
 	}
-
+	close(handleNotifications)
 	wg.Wait()
 
 	// Expect that notifications happened in the order that the events happened
