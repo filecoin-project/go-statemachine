@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -443,10 +444,10 @@ func TestSyncEventHandling(t *testing.T) {
 }
 
 func TestNotification(t *testing.T) {
-	notifications := 0
+	notifications := new(uint64)
 
 	var notifier fsm.Notifier = func(eventName fsm.EventName, state fsm.StateType) {
-		notifications++
+		atomic.AddUint64(notifications, 1)
 	}
 
 	ds := dss.MutexWrap(datastore.NewMapDatastore())
@@ -468,7 +469,8 @@ func TestNotification(t *testing.T) {
 	require.NoError(t, err)
 	<-te.done
 
-	require.Equal(t, notifications, 2)
+	total := atomic.LoadUint64(notifications)
+	require.Equal(t, total, uint64(2))
 }
 
 func TestSerialNotification(t *testing.T) {

@@ -119,9 +119,9 @@ func (d fsmHandler) reachedFinalityState(user interface{}) bool {
 	return final
 }
 
-// initNotifier will start up a goroutine which processes the notification queue
+// Init will start up a goroutine which processes the notification queue
 // in order
-func (d fsmHandler) initNotifier(closing <-chan struct{}) {
+func (d fsmHandler) Init(closing <-chan struct{}) {
 	if d.notifier != nil {
 		queue := make([]notification, 0, NotificationQueueSize)
 		toProcess := make(chan notification)
