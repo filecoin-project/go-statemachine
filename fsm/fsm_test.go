@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ipfs/go-datastore"
+	dss "github.com/ipfs/go-datastore/sync"
 	logging "github.com/ipfs/go-log"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
@@ -57,7 +59,7 @@ var stateEntryFuncs = fsm.StateEntryFuncs{
 }
 
 func TestTypeCheckingOnSetup(t *testing.T) {
-	ds := datastore.NewMapDatastore()
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 	t.Run("Bad state field", func(t *testing.T) {
 		smm, err := fsm.New(ds, fsm.Parameters{
@@ -350,7 +352,7 @@ func newFsm(ds datastore.Datastore, te *testEnvironment) (fsm.Group, error) {
 }
 
 func TestArgumentChecks(t *testing.T) {
-	ds := datastore.NewMapDatastore()
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 	smm, err := newFsm(ds, te)
 	close(te.proceed)
@@ -372,7 +374,7 @@ func TestArgumentChecks(t *testing.T) {
 
 func TestBasic(t *testing.T) {
 	for i := 0; i < 1000; i++ { // run a few times to expose any races
-		ds := datastore.NewMapDatastore()
+		ds := dss.MutexWrap(datastore.NewMapDatastore())
 
 		te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 		close(te.proceed)
@@ -389,7 +391,7 @@ func TestBasic(t *testing.T) {
 
 func TestPersist(t *testing.T) {
 	for i := 0; i < 1000; i++ { // run a few times to expose any races
-		ds := datastore.NewMapDatastore()
+		ds := dss.MutexWrap(datastore.NewMapDatastore())
 
 		te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 		smm, err := newFsm(ds, te)
@@ -416,7 +418,7 @@ func TestPersist(t *testing.T) {
 
 func TestSyncEventHandling(t *testing.T) {
 	ctx := context.Background()
-	ds := datastore.NewMapDatastore()
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
 
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 	smm, err := newFsm(ds, te)
@@ -442,13 +444,13 @@ func TestSyncEventHandling(t *testing.T) {
 }
 
 func TestNotification(t *testing.T) {
-	notifications := 0
+	notifications := new(uint64)
 
 	var notifier fsm.Notifier = func(eventName fsm.EventName, state fsm.StateType) {
-		notifications++
+		atomic.AddUint64(notifications, 1)
 	}
 
-	ds := datastore.NewMapDatastore()
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
 
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(te.proceed)
@@ -467,7 +469,8 @@ func TestNotification(t *testing.T) {
 	require.NoError(t, err)
 	<-te.done
 
-	require.Equal(t, notifications, 2)
+	total := atomic.LoadUint64(notifications)
+	require.Equal(t, total, uint64(2))
 }
 
 func TestSerialNotification(t *testing.T) {
@@ -488,14 +491,16 @@ func TestSerialNotification(t *testing.T) {
 	var notifications []string
 
 	wg := sync.WaitGroup{}
+	handleNotifications := make(chan struct{})
 	wg.Add(len(events))
 
 	var notifier fsm.Notifier = func(eventName fsm.EventName, state fsm.StateType) {
+		<-handleNotifications
 		notifications = append(notifications, eventName.(string))
 		wg.Done()
 	}
 
-	ds := datastore.NewMapDatastore()
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
 	params := fsm.Parameters{
 		Environment:     te,
 		StateType:       statemachine.TestState{},
@@ -512,7 +517,7 @@ func TestSerialNotification(t *testing.T) {
 		err = smm.Send(uint64(2), eventName)
 		require.NoError(t, err)
 	}
-
+	close(handleNotifications)
 	wg.Wait()
 
 	// Expect that notifications happened in the order that the events happened
@@ -520,7 +525,7 @@ func TestSerialNotification(t *testing.T) {
 }
 
 func TestNoChangeHandler(t *testing.T) {
-	ds := datastore.NewMapDatastore()
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
 
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(te.proceed)
@@ -539,7 +544,7 @@ func TestNoChangeHandler(t *testing.T) {
 }
 
 func TestAllStateEvent(t *testing.T) {
-	ds := datastore.NewMapDatastore()
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
 
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
 	close(te.proceed)
@@ -563,7 +568,7 @@ func TestFinalityStates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
-	ds := datastore.NewMapDatastore()
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
 
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 	smm, err := newFsm(ds, te)
