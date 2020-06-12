@@ -142,7 +142,7 @@ func (d fsmHandler) Init(closing <-chan struct{}) {
 				}
 				return toProcess
 			}
-			nextNofication := func() notification {
+			nextNotification := func() notification {
 				if len(queue) == 0 {
 					return notification{}
 				}
@@ -152,7 +152,7 @@ func (d fsmHandler) Init(closing <-chan struct{}) {
 				select {
 				case n := <-d.notifications:
 					queue = append(queue, n)
-				case outgoing() <- nextNofication():
+				case outgoing() <- nextNotification():
 					queue = queue[1:]
 				case <-closing:
 					return
