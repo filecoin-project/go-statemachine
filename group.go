@@ -15,11 +15,19 @@ type StateHandler interface {
 	Plan(events []Event, user interface{}) (interface{}, uint64, error)
 }
 
+type StateHandlerWithInit interface {
+	StateHandler
+	Init(<-chan struct{})
+}
+
 // StateGroup manages a group of state machines sharing the same logic
 type StateGroup struct {
 	sts       *statestore.StateStore
 	hnd       StateHandler
 	stateType reflect.Type
+
+	closing      chan struct{}
+	initNotifier sync.Once
 
 	lk  sync.Mutex
 	sms map[datastore.Key]*StateMachine
@@ -31,8 +39,15 @@ func New(ds datastore.Datastore, hnd StateHandler, stateType interface{}) *State
 		sts:       statestore.New(ds),
 		hnd:       hnd,
 		stateType: reflect.TypeOf(stateType),
+		closing:   make(chan struct{}),
+		sms:       map[datastore.Key]*StateMachine{},
+	}
+}
 
-		sms: map[datastore.Key]*StateMachine{},
+func (s *StateGroup) init() {
+	initter, ok := s.hnd.(StateHandlerWithInit)
+	if ok {
+		initter.Init(s.closing)
 	}
 }
 
@@ -85,6 +100,7 @@ func (s *StateGroup) Send(id interface{}, evt interface{}) (err error) {
 }
 
 func (s *StateGroup) loadOrCreate(name interface{}, userState interface{}) (*StateMachine, error) {
+	s.initNotifier.Do(s.init)
 	exists, err := s.sts.Has(name)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to check if state for %v exists: %w", name, err)
@@ -130,6 +146,7 @@ func (s *StateGroup) Stop(ctx context.Context) error {
 		}
 	}
 
+	close(s.closing)
 	return nil
 }
 

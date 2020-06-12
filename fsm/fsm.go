@@ -15,10 +15,18 @@ type fsmHandler struct {
 	stateType       reflect.Type
 	stateKeyField   StateKeyField
 	notifier        Notifier
+	notifications   chan notification
 	eventProcessor  EventProcessor
 	stateEntryFuncs StateEntryFuncs
 	environment     Environment
 	finalityStates  map[StateKey]struct{}
+}
+
+const NotificationQueueSize = 128
+
+type notification struct {
+	eventName EventName
+	state     StateType
 }
 
 // NewFSMHandler defines an StateHandler for go-statemachine that implements
@@ -65,6 +73,10 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 		d.finalityStates[finalityState] = struct{}{}
 	}
 
+	if d.notifier != nil {
+		d.notifications = make(chan notification)
+	}
+
 	return d, nil
 }
 
@@ -90,7 +102,7 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 	}
 	currentState := userValue.Elem().FieldByName(string(d.stateKeyField)).Interface()
 	if d.notifier != nil {
-		go d.notifier(eventName, userValue.Elem().Interface())
+		d.notifications <- notification{eventName, userValue.Elem().Interface()}
 	}
 	_, final := d.finalityStates[currentState]
 	if final {
@@ -105,6 +117,49 @@ func (d fsmHandler) reachedFinalityState(user interface{}) bool {
 	currentState := userValue.FieldByName(string(d.stateKeyField)).Interface()
 	_, final := d.finalityStates[currentState]
 	return final
+}
+
+// Init will start up a goroutine which processes the notification queue
+// in order
+func (d fsmHandler) Init(closing <-chan struct{}) {
+	if d.notifier != nil {
+		queue := make([]notification, 0, NotificationQueueSize)
+		toProcess := make(chan notification)
+		go func() {
+			for {
+				select {
+				case n := <-toProcess:
+					d.notifier(n.eventName, n.state)
+				case <-closing:
+					return
+				}
+			}
+		}()
+		go func() {
+			outgoing := func() chan<- notification {
+				if len(queue) == 0 {
+					return nil
+				}
+				return toProcess
+			}
+			nextNotification := func() notification {
+				if len(queue) == 0 {
+					return notification{}
+				}
+				return queue[0]
+			}
+			for {
+				select {
+				case n := <-d.notifications:
+					queue = append(queue, n)
+				case outgoing() <- nextNotification():
+					queue = queue[1:]
+				case <-closing:
+					return
+				}
+			}
+		}()
+	}
 }
 
 // handler makes a state next step function from the given callback
