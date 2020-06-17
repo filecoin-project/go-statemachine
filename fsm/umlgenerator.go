@@ -4,7 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
 )
 
 // StateNameMap maps a state type to a human readable string
@@ -72,6 +75,18 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 			return err
 		}
 	}
+
+	for _, state := range states {
+		handler, ok := parameters.StateEntryFuncs[state]
+		if ok {
+			// warning: it is not a gaurantee that this will will work
+			handlerName := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
+			handlerName = filepath.Ext(handlerName)
+			handlerName = strings.TrimPrefix(handlerName, ".")
+			generateStateDescription(w, state, handlerName)
+		}
+	}
+
 	for _, state := range startStates {
 		if err := generateStartStateDeclaration(w, state); err != nil {
 			return err
@@ -160,6 +175,11 @@ func generateFooterDeclaration(w io.Writer, syntaxType SyntaxType) error {
 func generateStateDeclaration(w io.Writer, state StateKey, stateNameMap reflect.Value) error {
 	name := stateNameMap.MapIndex(reflect.ValueOf(state))
 	_, err := fmt.Fprintf(w, "\tstate \"%s\" as %v\n", name.String(), state)
+	return err
+}
+
+func generateStateDescription(w io.Writer, state StateKey, handlerName string) error {
+	_, err := fmt.Fprintf(w, "\t%v : On entry runs %s\n", state, handlerName)
 	return err
 }
 

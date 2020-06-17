@@ -30,6 +30,8 @@ var expectedString = `stateDiagram-v2
 	state "State A" as 1
 	state "State B" as 2
 	state "Final State" as 3
+	1 : On entry runs handleA
+	2 : On entry runs handleB
 	[*] --> 0
 	0 --> 1 : Start!
 	1 --> 1 : Restart!
