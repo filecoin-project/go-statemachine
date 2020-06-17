@@ -32,13 +32,16 @@ type notification struct {
 // a traditional Finite State Machine model -- transitions, start states,
 // end states, and callbacks
 func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
-	err := VerifyFSMParameters(parameters)
+	err := VerifyStateParameters(parameters)
 	if err != nil {
 		return nil, err
 	}
 	stateType := reflect.TypeOf(parameters.StateType)
 
-	eventProcessor := NewEventProcessor(parameters.StateType, parameters.StateKeyField, parameters.Events)
+	eventProcessor, err := NewEventProcessor(parameters.StateType, parameters.StateKeyField, parameters.Events)
+	if err != nil {
+		return nil, err
+	}
 	d := fsmHandler{
 		environment:     parameters.Environment,
 		stateType:       stateType,

@@ -49,7 +49,11 @@ type fsmEvent struct {
 }
 
 // NewEventProcessor returns a new event machine for the given state and event list
-func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []EventBuilder) EventProcessor {
+func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []EventBuilder) (EventProcessor, error) {
+	err := VerifyEventParameters(state, stateKeyField, events)
+	if err != nil {
+		return nil, err
+	}
 	stateType := reflect.TypeOf(state)
 
 	em := eventProcessor{
@@ -81,7 +85,7 @@ func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []Ev
 			em.transitions[eKey{name, src}] = dst
 		}
 	}
-	return em
+	return em, nil
 }
 
 // Event generates an event that can be dispatched to go-statemachine from the given event name and context args

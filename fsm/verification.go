@@ -6,8 +6,8 @@ import (
 	"golang.org/x/xerrors"
 )
 
-// VerifyFSMParameters verifies if the Parameters for an FSM specification are sound
-func VerifyFSMParameters(parameters Parameters) error {
+// VerifyStateParameters verifies if the Parameters for an FSM specification are sound
+func VerifyStateParameters(parameters Parameters) error {
 	environmentType := reflect.TypeOf(parameters.Environment)
 	stateType := reflect.TypeOf(parameters.StateType)
 	stateFieldType, ok := stateType.FieldByName(string(parameters.StateKeyField))
@@ -18,10 +18,32 @@ func VerifyFSMParameters(parameters Parameters) error {
 		return xerrors.Errorf("state field `%s` is not comparable", parameters.StateKeyField)
 	}
 
+	// type check state handlers
+	for state, stateEntryFunc := range parameters.StateEntryFuncs {
+		if !reflect.TypeOf(state).AssignableTo(stateFieldType.Type) {
+			return xerrors.Errorf("state key is not assignable to: %s", stateFieldType.Type.Name())
+		}
+		err := inspectStateEntryFunc(stateEntryFunc, environmentType, stateType)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func VerifyEventParameters(state StateType, stateKeyField StateKeyField, events []EventBuilder) error {
+	stateType := reflect.TypeOf(state)
+	stateFieldType, ok := stateType.FieldByName(string(stateKeyField))
+	if !ok {
+		return xerrors.Errorf("state type has no field `%s`", stateKeyField)
+	}
+	if !stateFieldType.Type.Comparable() {
+		return xerrors.Errorf("state field `%s` is not comparable", stateKeyField)
+	}
 	callbacks := map[EventName]struct{}{}
 
 	// Build transition map and store sets of all events and states.
-	for _, evtIface := range parameters.Events {
+	for _, evtIface := range events {
 		evt, ok := evtIface.(eventBuilder)
 		if !ok {
 			errEvt := evtIface.(errBuilder)
@@ -46,16 +68,6 @@ func VerifyFSMParameters(parameters Parameters) error {
 			if src != nil && !reflect.TypeOf(src).AssignableTo(stateFieldType.Type) {
 				return xerrors.Errorf("event `%+v` source type is not assignable to: %s", name, stateFieldType.Type.Name())
 			}
-		}
-	}
-	// type check state handlers
-	for state, stateEntryFunc := range parameters.StateEntryFuncs {
-		if !reflect.TypeOf(state).AssignableTo(stateFieldType.Type) {
-			return xerrors.Errorf("state key is not assignable to: %s", stateFieldType.Type.Name())
-		}
-		err := inspectStateEntryFunc(stateEntryFunc, environmentType, stateType)
-		if err != nil {
-			return err
 		}
 	}
 	return nil

@@ -32,7 +32,11 @@ type eventDecl struct {
 
 // GenerateUML genderates a UML state diagram (in Mermaid/PlantUML syntax) for a given FSM
 func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stateNameMap StateNameMap, eventNameMap EventNameMap, startStates []StateKey, includeFromAny bool) error {
-	err := VerifyFSMParameters(parameters)
+	err := VerifyStateParameters(parameters)
+	if err != nil {
+		return err
+	}
+	err = VerifyEventParameters(parameters.StateType, parameters.StateKeyField, parameters.Events)
 	if err != nil {
 		return err
 	}
