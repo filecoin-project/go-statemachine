@@ -112,18 +112,19 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 	var events []eventDecl
 	for _, evtIface := range parameters.Events {
 		evt := evtIface.(eventBuilder)
-		for src, dst := range evt.transitionsSoFar {
-			if src == nil {
-				if includeFromAny {
-					for _, state := range nonFinalityStates {
-						if dst == nil {
-							events = append(events, eventDecl{state, state, evt.name})
-						} else {
-							events = append(events, eventDecl{state, dst, evt.name})
-						}
-					}
+		dst, ok := evt.transitionsSoFar[nil]
+		if ok && includeFromAny {
+			for _, state := range nonFinalityStates {
+				if dst == nil {
+					events = append(events, eventDecl{state, state, evt.name})
+				} else {
+					events = append(events, eventDecl{state, dst, evt.name})
 				}
-			} else {
+			}
+		}
+		for _, src := range states {
+			dst, ok := evt.transitionsSoFar[src]
+			if ok {
 				if dst == nil {
 					events = append(events, eventDecl{src, src, evt.name})
 				} else {
