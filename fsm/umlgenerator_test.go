@@ -25,7 +25,7 @@ var eventNameMap = map[string]string{
 	"finish":  "Finish!",
 }
 
-var expectedString = `statediagram->v2
+var expectedString = `stateDiagram-v2
 	state "Start State" as 0
 	state "State A" as 1
 	state "State B" as 2
@@ -57,7 +57,7 @@ func TestGenerateUML(t *testing.T) {
 		Notifier:        nil,
 	}
 	buf := new(bytes.Buffer)
-	err := fsm.GenerateUML(buf, fsm.MermaidUML, defaultFsmParams, stateNameMap, eventNameMap, []fsm.StateKey{uint64(0)})
+	err := fsm.GenerateUML(buf, fsm.MermaidUML, defaultFsmParams, stateNameMap, eventNameMap, []fsm.StateKey{uint64(0)}, true)
 	require.NoError(t, err)
 	require.Equal(t, expectedString, string(buf.Bytes()))
 }

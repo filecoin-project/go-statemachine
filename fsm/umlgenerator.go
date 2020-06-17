@@ -28,7 +28,7 @@ type eventDecl struct {
 }
 
 // GenerateUML genderates a UML state diagram (in Mermaid/PlantUML syntax) for a given FSM
-func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stateNameMap StateNameMap, eventNameMap EventNameMap, startStates []StateKey) error {
+func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stateNameMap StateNameMap, eventNameMap EventNameMap, startStates []StateKey, includeFromAny bool) error {
 	err := VerifyFSMParameters(parameters)
 	if err != nil {
 		return err
@@ -95,11 +95,13 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 		evt := evtIface.(eventBuilder)
 		for src, dst := range evt.transitionsSoFar {
 			if src == nil {
-				for _, state := range nonFinalityStates {
-					if dst == nil {
-						events = append(events, eventDecl{state, state, evt.name})
-					} else {
-						events = append(events, eventDecl{state, dst, evt.name})
+				if includeFromAny {
+					for _, state := range nonFinalityStates {
+						if dst == nil {
+							events = append(events, eventDecl{state, state, evt.name})
+						} else {
+							events = append(events, eventDecl{state, dst, evt.name})
+						}
 					}
 				}
 			} else {
@@ -136,7 +138,7 @@ func generateHeaderDeclaration(w io.Writer, syntaxType SyntaxType) error {
 		_, err := fmt.Fprintf(w, "@startuml\n")
 		return err
 	case MermaidUML:
-		_, err := fmt.Fprintf(w, "statediagram->v2\n")
+		_, err := fmt.Fprintf(w, "stateDiagram-v2\n")
 		return err
 	default:
 		return errors.New("Unknown syntax format")
