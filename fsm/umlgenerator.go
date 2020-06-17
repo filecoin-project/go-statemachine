@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -31,7 +32,7 @@ type eventDecl struct {
 }
 
 // GenerateUML genderates a UML state diagram (in Mermaid/PlantUML syntax) for a given FSM
-func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stateNameMap StateNameMap, eventNameMap EventNameMap, startStates []StateKey, includeFromAny bool) error {
+func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stateNameMap StateNameMap, eventNameMap EventNameMap, startStates []StateKey, includeFromAny bool, stateCmp func(a, b StateKey) bool) error {
 	err := VerifyStateParameters(parameters)
 	if err != nil {
 		return err
@@ -74,6 +75,7 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 			}
 		}
 	}
+	sort.Sort(SortableStates{states, stateCmp})
 	for _, state := range states {
 		if err := generateStateDeclaration(w, state, stateNameMapValue); err != nil {
 			return err
@@ -212,3 +214,14 @@ func appendIfMissing(states []StateKey, state StateKey) []StateKey {
 	}
 	return append(states, state)
 }
+
+type SortableStates struct {
+	keys     []StateKey
+	stateCmp func(a, b StateKey) bool
+}
+
+func (s SortableStates) Len() int {
+	return len(s.keys)
+}
+func (s SortableStates) Less(i, j int) bool { return s.stateCmp(s.keys[i], s.keys[j]) }
+func (s SortableStates) Swap(i, j int)      { s.keys[i], s.keys[j] = s.keys[j], s.keys[i] }

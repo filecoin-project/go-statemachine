@@ -59,7 +59,11 @@ func TestGenerateUML(t *testing.T) {
 		Notifier:        nil,
 	}
 	buf := new(bytes.Buffer)
-	err := fsm.GenerateUML(buf, fsm.MermaidUML, defaultFsmParams, stateNameMap, eventNameMap, []fsm.StateKey{uint64(0)}, true)
+	err := fsm.GenerateUML(buf, fsm.MermaidUML, defaultFsmParams, stateNameMap, eventNameMap, []fsm.StateKey{uint64(0)}, true, func(a, b fsm.StateKey) bool {
+		aI := a.(uint64)
+		bI := b.(uint64)
+		return aI < bI
+	})
 	require.NoError(t, err)
 	require.Equal(t, expectedString, string(buf.Bytes()))
 }
