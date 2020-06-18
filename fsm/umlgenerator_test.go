@@ -48,6 +48,29 @@ var expectedString = `stateDiagram-v2
 	3 --> [*]
 `
 
+var expectedStringWithoutAny = `stateDiagram-v2
+	state "Start State" as 0
+	state "State A" as 1
+	state "State B" as 2
+	state "Final State" as 3
+	1 : On entry runs handleA
+	2 : On entry runs handleB
+	[*] --> 0
+	note right of 0
+		The following events are not shown cause they can trigger from any state:
+
+		Any! - transitions state to State A
+		Finish! - transitions state to Final State
+	end note
+	0 --> 1 : Start!
+	1 --> 1 : Restart!
+	2 --> 1 : Restart!
+	1 --> 2 : B!
+	1 --> 1 : Resume!
+	2 --> 2 : Resume!
+	3 --> [*]
+`
+
 func TestGenerateUML(t *testing.T) {
 	defaultFsmParams := fsm.Parameters{
 		Environment:     &testEnvironment{},
@@ -58,12 +81,22 @@ func TestGenerateUML(t *testing.T) {
 		FinalityStates:  []fsm.StateKey{uint64(3)},
 		Notifier:        nil,
 	}
-	buf := new(bytes.Buffer)
-	err := fsm.GenerateUML(buf, fsm.MermaidUML, defaultFsmParams, stateNameMap, eventNameMap, []fsm.StateKey{uint64(0)}, true, func(a, b fsm.StateKey) bool {
-		aI := a.(uint64)
-		bI := b.(uint64)
-		return aI < bI
+	t.Run("when rendering of transition from any states is on", func(t *testing.T) {
+		buf := new(bytes.Buffer)
+		err := fsm.GenerateUML(buf, fsm.MermaidUML, defaultFsmParams, stateNameMap, eventNameMap, []fsm.StateKey{uint64(0)}, true, sortStateKey)
+		require.NoError(t, err)
+		require.Equal(t, expectedString, string(buf.Bytes()))
 	})
-	require.NoError(t, err)
-	require.Equal(t, expectedString, string(buf.Bytes()))
+	t.Run("when rendering of transition from any states is off", func(t *testing.T) {
+		buf := new(bytes.Buffer)
+		err := fsm.GenerateUML(buf, fsm.MermaidUML, defaultFsmParams, stateNameMap, eventNameMap, []fsm.StateKey{uint64(0)}, false, sortStateKey)
+		require.NoError(t, err)
+		require.Equal(t, expectedStringWithoutAny, string(buf.Bytes()))
+	})
+}
+
+func sortStateKey(a, b fsm.StateKey) bool {
+	aI := a.(uint64)
+	bI := b.(uint64)
+	return aI < bI
 }

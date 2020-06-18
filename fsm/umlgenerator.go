@@ -31,51 +31,28 @@ type eventDecl struct {
 	name  EventName
 }
 
+type anyEventDecl struct {
+	end  StateKey
+	name EventName
+}
+
 // GenerateUML genderates a UML state diagram (in Mermaid/PlantUML syntax) for a given FSM
 func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stateNameMap StateNameMap, eventNameMap EventNameMap, startStates []StateKey, includeFromAny bool, stateCmp func(a, b StateKey) bool) error {
-	err := VerifyStateParameters(parameters)
-	if err != nil {
+	if err := VerifyStateParameters(parameters); err != nil {
 		return err
 	}
-	err = VerifyEventParameters(parameters.StateType, parameters.StateKeyField, parameters.Events)
-	if err != nil {
+	if err := VerifyEventParameters(parameters.StateType, parameters.StateKeyField, parameters.Events); err != nil {
 		return err
 	}
-	stateType := reflect.TypeOf(parameters.StateType)
-	stateFieldType, _ := stateType.FieldByName(string(parameters.StateKeyField))
 	stateNameMapValue := reflect.ValueOf(stateNameMap)
-	if stateNameMapValue.Kind() != reflect.Map {
-		return errors.New("stateNameMap must be a map")
-	}
-	if !stateNameMapValue.Type().Key().AssignableTo(stateFieldType.Type) {
-		return errors.New("stateNameMap has wrong key type")
-	}
-	if stateNameMapValue.Type().Elem().Kind() != reflect.String {
-		return errors.New("stateNameMap must have string values")
-	}
 	eventNameMapValue := reflect.ValueOf(eventNameMap)
-	if eventNameMapValue.Kind() != reflect.Map {
-		return errors.New("eventNameMap must be a map")
-	}
-	if eventNameMapValue.Type().Elem().Kind() != reflect.String {
-		return errors.New("eventNameMap must have string values")
+	if err := checkNameMaps(parameters, stateNameMapValue, eventNameMapValue); err != nil {
+		return err
 	}
 	if err := generateHeaderDeclaration(w, syntaxType); err != nil {
 		return err
 	}
-	var states []StateKey
-	for _, evtIface := range parameters.Events {
-		evt := evtIface.(eventBuilder)
-		for src, dst := range evt.transitionsSoFar {
-			if src != nil {
-				states = appendIfMissing(states, src)
-			}
-			if dst != nil {
-				states = appendIfMissing(states, dst)
-			}
-		}
-	}
-	sort.Sort(SortableStates{states, stateCmp})
+	states := prepareStates(parameters.Events, stateCmp)
 	for _, state := range states {
 		if err := generateStateDeclaration(w, state, stateNameMapValue); err != nil {
 			return err
@@ -86,10 +63,9 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 		handler, ok := parameters.StateEntryFuncs[state]
 		if ok {
 			// warning: it is not a gaurantee that this will will work
-			handlerName := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
-			handlerName = filepath.Ext(handlerName)
-			handlerName = strings.TrimPrefix(handlerName, ".")
-			generateStateDescription(w, state, handlerName)
+			if err := generateStateDescription(w, state, handler); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -98,42 +74,11 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 			return err
 		}
 	}
-	var nonFinalityStates []StateKey
-	for _, state := range states {
-		isFinality := false
-		for _, finalityState := range parameters.FinalityStates {
-			if state == finalityState {
-				isFinality = true
-				break
-			}
-		}
-		if !isFinality {
-			nonFinalityStates = append(nonFinalityStates, state)
-		}
-	}
-	var events []eventDecl
-	for _, evtIface := range parameters.Events {
-		evt := evtIface.(eventBuilder)
-		dst, ok := evt.transitionsSoFar[nil]
-		if ok && includeFromAny {
-			for _, state := range nonFinalityStates {
-				if dst == nil {
-					events = append(events, eventDecl{state, state, evt.name})
-				} else {
-					events = append(events, eventDecl{state, dst, evt.name})
-				}
-			}
-		}
-		for _, src := range states {
-			dst, ok := evt.transitionsSoFar[src]
-			if ok {
-				if dst == nil {
-					events = append(events, eventDecl{src, src, evt.name})
-				} else {
-					events = append(events, eventDecl{src, dst, evt.name})
-				}
-			}
-		}
+
+	events, anyEvents := prepareEvents(parameters.Events, parameters.FinalityStates, states, includeFromAny)
+
+	if err := generateFromAnyEventsDeclaration(w, anyEvents, states[0], stateNameMapValue, eventNameMapValue); err != nil {
+		return err
 	}
 
 	for _, event := range events {
@@ -185,7 +130,10 @@ func generateStateDeclaration(w io.Writer, state StateKey, stateNameMap reflect.
 	return err
 }
 
-func generateStateDescription(w io.Writer, state StateKey, handlerName string) error {
+func generateStateDescription(w io.Writer, state StateKey, handler StateEntryFunc) error {
+	handlerName := runtime.FuncForPC(reflect.ValueOf(handler).Pointer()).Name()
+	handlerName = filepath.Ext(handlerName)
+	handlerName = strings.TrimPrefix(handlerName, ".")
 	_, err := fmt.Fprintf(w, "\t%v : On entry runs %s\n", state, handlerName)
 	return err
 }
@@ -193,6 +141,30 @@ func generateStateDescription(w io.Writer, state StateKey, handlerName string) e
 func generateTransitionDeclaration(w io.Writer, startState StateKey, endState StateKey, eventName EventName, eventNameMap reflect.Value) error {
 	name := eventNameMap.MapIndex(reflect.ValueOf(eventName))
 	_, err := fmt.Fprintf(w, "\t%v --> %v : %s\n", startState, endState, name.String())
+	return err
+}
+
+func generateFromAnyEventsDeclaration(w io.Writer, anyEvents []anyEventDecl, state StateKey, stateNameMap reflect.Value, eventNameMap reflect.Value) error {
+	if len(anyEvents) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "\tnote right of %v\n\t\tThe following events are not shown cause they can trigger from any state:\n\n", state); err != nil {
+		return err
+	}
+	for _, anyEvent := range anyEvents {
+		eventName := eventNameMap.MapIndex(reflect.ValueOf(anyEvent.name))
+		if anyEvent.end == nil {
+			if _, err := fmt.Fprintf(w, "\t\t%s - does not transition state\n", eventName); err != nil {
+				return err
+			}
+		} else {
+			stateName := stateNameMap.MapIndex(reflect.ValueOf(anyEvent.end))
+			if _, err := fmt.Fprintf(w, "\t\t%s - transitions state to %s\n", eventName, stateName); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := fmt.Fprintf(w, "\tend note\n")
 	return err
 }
 
@@ -215,13 +187,102 @@ func appendIfMissing(states []StateKey, state StateKey) []StateKey {
 	return append(states, state)
 }
 
-type SortableStates struct {
+type sortableStates struct {
 	keys     []StateKey
 	stateCmp func(a, b StateKey) bool
 }
 
-func (s SortableStates) Len() int {
+func (s sortableStates) Len() int {
 	return len(s.keys)
 }
-func (s SortableStates) Less(i, j int) bool { return s.stateCmp(s.keys[i], s.keys[j]) }
-func (s SortableStates) Swap(i, j int)      { s.keys[i], s.keys[j] = s.keys[j], s.keys[i] }
+func (s sortableStates) Less(i, j int) bool { return s.stateCmp(s.keys[i], s.keys[j]) }
+func (s sortableStates) Swap(i, j int)      { s.keys[i], s.keys[j] = s.keys[j], s.keys[i] }
+
+func prepareStates(events []EventBuilder, stateCmp func(a, b StateKey) bool) []StateKey {
+	var states []StateKey
+	for _, evtIface := range events {
+		evt := evtIface.(eventBuilder)
+		for src, dst := range evt.transitionsSoFar {
+			if src != nil {
+				states = appendIfMissing(states, src)
+			}
+			if dst != nil {
+				states = appendIfMissing(states, dst)
+			}
+		}
+	}
+	sort.Sort(sortableStates{states, stateCmp})
+	return states
+}
+
+func checkNameMaps(parameters Parameters, stateNameMapValue reflect.Value, eventNameMapValue reflect.Value) error {
+	stateType := reflect.TypeOf(parameters.StateType)
+	stateFieldType, _ := stateType.FieldByName(string(parameters.StateKeyField))
+	if stateNameMapValue.Kind() != reflect.Map {
+		return errors.New("stateNameMap must be a map")
+	}
+	if !stateNameMapValue.Type().Key().AssignableTo(stateFieldType.Type) {
+		return errors.New("stateNameMap has wrong key type")
+	}
+	if stateNameMapValue.Type().Elem().Kind() != reflect.String {
+		return errors.New("stateNameMap must have string values")
+	}
+	if eventNameMapValue.Kind() != reflect.Map {
+		return errors.New("eventNameMap must be a map")
+	}
+	if eventNameMapValue.Type().Elem().Kind() != reflect.String {
+		return errors.New("eventNameMap must have string values")
+	}
+	return nil
+}
+
+func getNonFinalityStates(states []StateKey, finalityStates []StateKey) []StateKey {
+	var nonFinalityStates []StateKey
+	for _, state := range states {
+		isFinality := false
+		for _, finalityState := range finalityStates {
+			if state == finalityState {
+				isFinality = true
+				break
+			}
+		}
+		if !isFinality {
+			nonFinalityStates = append(nonFinalityStates, state)
+		}
+	}
+	return nonFinalityStates
+}
+
+func prepareEvents(srcEvents []EventBuilder, finalityStates []StateKey, states []StateKey, includeFromAny bool) ([]eventDecl, []anyEventDecl) {
+	var events []eventDecl
+	var anyEvents []anyEventDecl
+	nonFinalityStates := getNonFinalityStates(states, finalityStates)
+	for _, evtIface := range srcEvents {
+		evt := evtIface.(eventBuilder)
+		dst, ok := evt.transitionsSoFar[nil]
+		if ok {
+			if includeFromAny {
+				for _, state := range nonFinalityStates {
+					if dst == nil {
+						events = append(events, eventDecl{state, state, evt.name})
+					} else {
+						events = append(events, eventDecl{state, dst, evt.name})
+					}
+				}
+			} else {
+				anyEvents = append(anyEvents, anyEventDecl{dst, evt.name})
+			}
+		}
+		for _, src := range states {
+			dst, ok := evt.transitionsSoFar[src]
+			if ok {
+				if dst == nil {
+					events = append(events, eventDecl{src, src, evt.name})
+				} else {
+					events = append(events, eventDecl{src, dst, evt.name})
+				}
+			}
+		}
+	}
+	return events, anyEvents
+}
