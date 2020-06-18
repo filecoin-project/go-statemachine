@@ -85,13 +85,13 @@ func TestGenerateUML(t *testing.T) {
 		buf := new(bytes.Buffer)
 		err := fsm.GenerateUML(buf, fsm.MermaidUML, defaultFsmParams, stateNameMap, eventNameMap, []fsm.StateKey{uint64(0)}, true, sortStateKey)
 		require.NoError(t, err)
-		require.Equal(t, expectedString, string(buf.Bytes()))
+		require.Equal(t, expectedString, buf.String())
 	})
 	t.Run("when rendering of transition from any states is off", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		err := fsm.GenerateUML(buf, fsm.MermaidUML, defaultFsmParams, stateNameMap, eventNameMap, []fsm.StateKey{uint64(0)}, false, sortStateKey)
 		require.NoError(t, err)
-		require.Equal(t, expectedStringWithoutAny, string(buf.Bytes()))
+		require.Equal(t, expectedStringWithoutAny, buf.String())
 	})
 }
 
