@@ -57,7 +57,7 @@ var expectedStringWithoutAny = `stateDiagram-v2
 	2 : On entry runs handleB
 	[*] --> 0
 	note right of 0
-		The following events are not shown cause they can trigger from any state:
+		The following events are not shown cause they can trigger from any state.
 
 		Any! - transitions state to State A
 		Finish! - transitions state to Final State

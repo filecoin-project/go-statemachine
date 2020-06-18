@@ -148,7 +148,7 @@ func generateFromAnyEventsDeclaration(w io.Writer, anyEvents []anyEventDecl, sta
 	if len(anyEvents) == 0 {
 		return nil
 	}
-	if _, err := fmt.Fprintf(w, "\tnote right of %v\n\t\tThe following events are not shown cause they can trigger from any state:\n\n", state); err != nil {
+	if _, err := fmt.Fprintf(w, "\tnote right of %v\n\t\tThe following events are not shown cause they can trigger from any state.\n\n", state); err != nil {
 		return err
 	}
 	for _, anyEvent := range anyEvents {
