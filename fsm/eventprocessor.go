@@ -50,14 +50,11 @@ type fsmEvent struct {
 
 // NewEventProcessor returns a new event machine for the given state and event list
 func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []EventBuilder) (EventProcessor, error) {
+	err := VerifyEventParameters(state, stateKeyField, events)
+	if err != nil {
+		return nil, err
+	}
 	stateType := reflect.TypeOf(state)
-	stateFieldType, ok := stateType.FieldByName(string(stateKeyField))
-	if !ok {
-		return nil, xerrors.Errorf("state type has no field `%s`", stateKeyField)
-	}
-	if !stateFieldType.Type.Comparable() {
-		return nil, xerrors.Errorf("state field `%s` is not comparable", stateKeyField)
-	}
 
 	em := eventProcessor{
 		stateType:     stateType,
@@ -68,34 +65,23 @@ func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []Ev
 
 	// Build transition map and store sets of all events and states.
 	for _, evtIface := range events {
-		evt, ok := evtIface.(eventBuilder)
-		if !ok {
-			errEvt := evtIface.(errBuilder)
-			return nil, errEvt.err
-		}
+		evt := evtIface.(eventBuilder)
 
 		name := evt.name
 
-		_, exists := em.callbacks[name]
-		if exists {
-			return nil, xerrors.Errorf("Duplicate event name `%+v`", name)
-		}
-
-		argumentTypes, err := inspectActionFunc(name, evt.action, stateType)
-		if err != nil {
-			return nil, err
+		var argumentTypes []reflect.Type
+		if evt.action != nil {
+			atType := reflect.TypeOf(evt.action)
+			argumentTypes = make([]reflect.Type, atType.NumIn()-1)
+			for i := range argumentTypes {
+				argumentTypes[i] = atType.In(i + 1)
+			}
 		}
 		em.callbacks[name] = callback{
 			argumentTypes: argumentTypes,
 			action:        evt.action,
 		}
 		for src, dst := range evt.transitionsSoFar {
-			if dst != nil && !reflect.TypeOf(dst).AssignableTo(stateFieldType.Type) {
-				return nil, xerrors.Errorf("event `%+v` destination type is not assignable to: %s", name, stateFieldType.Type.Name())
-			}
-			if src != nil && !reflect.TypeOf(src).AssignableTo(stateFieldType.Type) {
-				return nil, xerrors.Errorf("event `%+v` source type is not assignable to: %s", name, stateFieldType.Type.Name())
-			}
 			em.transitions[eKey{name, src}] = dst
 		}
 	}
@@ -181,29 +167,4 @@ func completeEvent(event fsmEvent, err error) error {
 		}
 	}
 	return err
-}
-
-func inspectActionFunc(name EventName, action ActionFunc, stateType reflect.Type) ([]reflect.Type, error) {
-	if action == nil {
-		return nil, nil
-	}
-
-	atType := reflect.TypeOf(action)
-	if atType.Kind() != reflect.Func {
-		return nil, xerrors.Errorf("event `%+v` has a callback that is not a function", name)
-	}
-	if atType.NumIn() < 1 {
-		return nil, xerrors.Errorf("event `%+v` has a callback that does not take the state", name)
-	}
-	if !reflect.PtrTo(stateType).AssignableTo(atType.In(0)) {
-		return nil, xerrors.Errorf("event `%+v` has a callback that does not take the state", name)
-	}
-	if atType.NumOut() != 1 || atType.Out(0).AssignableTo(reflect.TypeOf(new(error))) {
-		return nil, xerrors.Errorf("event `%+v` callback should return exactly one param that is an error", name)
-	}
-	argumentTypes := make([]reflect.Type, atType.NumIn()-1)
-	for i := range argumentTypes {
-		argumentTypes[i] = atType.In(i + 1)
-	}
-	return argumentTypes, nil
 }

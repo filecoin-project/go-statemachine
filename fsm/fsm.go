@@ -6,7 +6,6 @@ import (
 
 	"github.com/filecoin-project/go-statemachine"
 	logging "github.com/ipfs/go-log"
-	"golang.org/x/xerrors"
 )
 
 var log = logging.Logger("fsm")
@@ -33,15 +32,11 @@ type notification struct {
 // a traditional Finite State Machine model -- transitions, start states,
 // end states, and callbacks
 func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
-	environmentType := reflect.TypeOf(parameters.Environment)
+	err := VerifyStateParameters(parameters)
+	if err != nil {
+		return nil, err
+	}
 	stateType := reflect.TypeOf(parameters.StateType)
-	stateFieldType, ok := stateType.FieldByName(string(parameters.StateKeyField))
-	if !ok {
-		return nil, xerrors.Errorf("state type has no field `%s`", parameters.StateKeyField)
-	}
-	if !stateFieldType.Type.Comparable() {
-		return nil, xerrors.Errorf("state field `%s` is not comparable", parameters.StateKeyField)
-	}
 
 	eventProcessor, err := NewEventProcessor(parameters.StateType, parameters.StateKeyField, parameters.Events)
 	if err != nil {
@@ -59,13 +54,6 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 
 	// type check state handlers
 	for state, stateEntryFunc := range parameters.StateEntryFuncs {
-		if !reflect.TypeOf(state).AssignableTo(stateFieldType.Type) {
-			return nil, xerrors.Errorf("state key is not assignable to: %s", stateFieldType.Type.Name())
-		}
-		err := inspectStateEntryFunc(stateEntryFunc, environmentType, d.stateType)
-		if err != nil {
-			return nil, err
-		}
 		d.stateEntryFuncs[state] = stateEntryFunc
 	}
 
@@ -195,26 +183,3 @@ func (dc fsmContext) Trigger(event EventName, args ...interface{}) error {
 }
 
 var _ Context = fsmContext{}
-
-func inspectStateEntryFunc(stateEntryFunc interface{}, environmentType reflect.Type, stateType reflect.Type) error {
-	stateEntryFuncType := reflect.TypeOf(stateEntryFunc)
-	if stateEntryFuncType.Kind() != reflect.Func {
-		return xerrors.Errorf("handler for state is not a function")
-	}
-	if stateEntryFuncType.NumIn() != 3 {
-		return xerrors.Errorf("handler for state does not take correct number of arguments")
-	}
-	if !reflect.TypeOf((*Context)(nil)).Elem().AssignableTo(stateEntryFuncType.In(0)) {
-		return xerrors.Errorf("handler for state does not match context parameter")
-	}
-	if !environmentType.AssignableTo(stateEntryFuncType.In(1)) {
-		return xerrors.Errorf("handler for state does not match environment parameter")
-	}
-	if !stateType.AssignableTo(stateEntryFuncType.In(2)) {
-		return xerrors.Errorf("handler for state does not match state parameter")
-	}
-	if stateEntryFuncType.NumOut() != 1 || !stateEntryFuncType.Out(0).AssignableTo(reflect.TypeOf(new(error)).Elem()) {
-		return xerrors.Errorf("handler for state does not return an error")
-	}
-	return nil
-}

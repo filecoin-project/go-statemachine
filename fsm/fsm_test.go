@@ -43,19 +43,22 @@ var events = fsm.Events{
 	fsm.Event("finish").FromAny().To(uint64(3)),
 }
 
+func handleA(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
+	_ = ctx.Trigger("b", uint64(55))
+	<-te.proceed
+	return nil
+}
+
+func handleB(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
+
+	assert.Equal(te.t, uint64(2), ts.A)
+	close(te.done)
+	return nil
+}
+
 var stateEntryFuncs = fsm.StateEntryFuncs{
-
-	uint64(1): func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
-		_ = ctx.Trigger("b", uint64(55))
-		<-te.proceed
-		return nil
-	},
-	uint64(2): func(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
-
-		assert.Equal(te.t, uint64(2), ts.A)
-		close(te.done)
-		return nil
-	},
+	uint64(1): handleA,
+	uint64(2): handleB,
 }
 
 func TestTypeCheckingOnSetup(t *testing.T) {
