@@ -112,6 +112,9 @@ type Group interface {
 	// Get gets state for a single state machine
 	Get(id interface{}) *statestore.StoredState
 
+	// Has indicates whether there is data for the given state machine
+	Has(id interface{}) (bool, error)
+
 	// List outputs states of all state machines in this group
 	// out: *[]StateT
 	List(out interface{}) error
