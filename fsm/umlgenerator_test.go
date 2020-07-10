@@ -34,11 +34,6 @@ var expectedString = `stateDiagram-v2
 	1 : On entry runs handleA
 	2 : On entry runs handleB
 	[*] --> 0
-	note right of 2
-		The following events only record in this state.
-
-		Just Record!
-	end note
 	0 --> 1 : Start!
 	1 --> 1 : Restart!
 	2 --> 1 : Restart!
@@ -51,6 +46,12 @@ var expectedString = `stateDiagram-v2
 	0 --> 3 : Finish!
 	1 --> 3 : Finish!
 	2 --> 3 : Finish!
+	note right of 2
+		The following events only record in this state.
+
+		Just Record!
+	end note
+
 	3 --> [*]
 `
 
@@ -68,17 +69,18 @@ var expectedStringWithoutAny = `stateDiagram-v2
 		Any! - transitions state to State A
 		Finish! - transitions state to Final State
 	end note
-	note right of 2
-		The following events only record in this state.
-
-		Just Record!
-	end note
 	0 --> 1 : Start!
 	1 --> 1 : Restart!
 	2 --> 1 : Restart!
 	1 --> 2 : B!
 	1 --> 1 : Resume!
 	2 --> 2 : Resume!
+	note right of 2
+		The following events only record in this state.
+
+		Just Record!
+	end note
+
 	3 --> [*]
 `
 

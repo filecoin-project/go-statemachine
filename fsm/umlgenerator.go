@@ -81,14 +81,14 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 		return err
 	}
 
-	if err := generateJustRecordEventsDeclarations(w, justRecordEvents, stateNameMapValue, eventNameMapValue); err != nil {
-		return err
-	}
-
 	for _, event := range events {
 		if err := generateTransitionDeclaration(w, event.start, event.end, event.name, eventNameMapValue); err != nil {
 			return err
 		}
+	}
+
+	if err := generateJustRecordEventsDeclarations(w, justRecordEvents, stateNameMapValue, eventNameMapValue); err != nil {
+		return err
 	}
 
 	for _, state := range parameters.FinalityStates {
@@ -187,7 +187,7 @@ func generateJustRecordEventsDeclarations(w io.Writer, justRecordEvents map[Stat
 				return err
 			}
 		}
-		if _, err := fmt.Fprintf(w, "\tend note\n"); err != nil {
+		if _, err := fmt.Fprintf(w, "\tend note\n\n"); err != nil {
 			return err
 		}
 	}
