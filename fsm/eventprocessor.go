@@ -50,6 +50,12 @@ type fsmEvent struct {
 
 type nilEvent struct{}
 
+type justRecordError struct{}
+
+func (e justRecordError) Error() string {
+	return "record event does not get handler"
+}
+
 // NewEventProcessor returns a new event machine for the given state and event list
 func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []EventBuilder) (EventProcessor, error) {
 	err := VerifyEventParameters(state, stateKeyField, events)
@@ -133,6 +139,9 @@ func (em eventProcessor) Apply(evt statemachine.Event, user interface{}) (EventN
 	err := applyAction(userValue, e, cb)
 	if err != nil {
 		return nil, completeEvent(e, err)
+	}
+	if _, ok := destination.(recordEvent); ok {
+		return e.name, completeEvent(e, justRecordError{})
 	}
 	if destination != nil {
 		userValue.Elem().FieldByName(string(em.stateKeyField)).Set(reflect.ValueOf(destination))

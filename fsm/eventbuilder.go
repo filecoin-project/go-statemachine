@@ -2,6 +2,8 @@ package fsm
 
 import "golang.org/x/xerrors"
 
+type recordEvent struct{}
+
 type transitionToBuilder struct {
 	name             EventName
 	action           ActionFunc
@@ -23,6 +25,15 @@ func (t transitionToBuilder) ToNoChange() EventBuilder {
 	transitions := t.transitionsSoFar
 	for _, from := range t.nextFrom {
 		transitions[from] = nil
+	}
+	return eventBuilder{t.name, t.action, transitions}
+}
+
+// ToJustRecord means a transition ends in the same state it started in (and DOES NOT retrigger state cb)
+func (t transitionToBuilder) ToJustRecord() EventBuilder {
+	transitions := t.transitionsSoFar
+	for _, from := range t.nextFrom {
+		transitions[from] = recordEvent{}
 	}
 	return eventBuilder{t.name, t.action, transitions}
 }
@@ -121,6 +132,11 @@ func (e errBuilder) To(_ StateKey) EventBuilder {
 
 // ToNoChange passes on the error
 func (e errBuilder) ToNoChange() EventBuilder {
+	return e
+}
+
+// ToJustRecord passes on the error
+func (e errBuilder) ToJustRecord() EventBuilder {
 	return e
 }
 

@@ -73,6 +73,10 @@ func (s *stateGroup) SendSync(ctx context.Context, id interface{}, name EventNam
 	case <-ctx.Done():
 		return xerrors.New("Context cancelled")
 	case err := <-returnChannel:
+		_, justRecord := err.(justRecordError)
+		if justRecord {
+			return nil
+		}
 		return err
 	}
 }

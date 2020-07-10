@@ -17,12 +17,13 @@ var stateNameMap = map[uint64]string{
 }
 
 var eventNameMap = map[string]string{
-	"start":   "Start!",
-	"restart": "Restart!",
-	"b":       "B!",
-	"resume":  "Resume!",
-	"any":     "Any!",
-	"finish":  "Finish!",
+	"start":      "Start!",
+	"restart":    "Restart!",
+	"b":          "B!",
+	"resume":     "Resume!",
+	"justrecord": "Just Record!",
+	"any":        "Any!",
+	"finish":     "Finish!",
 }
 
 var expectedString = `stateDiagram-v2
@@ -33,6 +34,11 @@ var expectedString = `stateDiagram-v2
 	1 : On entry runs handleA
 	2 : On entry runs handleB
 	[*] --> 0
+	note right of 2
+		These events only record in this state (no handler triggered): 
+
+		Just Record!
+	end note
 	0 --> 1 : Start!
 	1 --> 1 : Restart!
 	2 --> 1 : Restart!
@@ -61,6 +67,11 @@ var expectedStringWithoutAny = `stateDiagram-v2
 
 		Any! - transitions state to State A
 		Finish! - transitions state to Final State
+	end note
+	note right of 2
+		These events only record in this state (no handler triggered): 
+
+		Just Record!
 	end note
 	0 --> 1 : Start!
 	1 --> 1 : Restart!

@@ -54,6 +54,8 @@ type TransitionToBuilder interface {
 	To(StateKey) EventBuilder
 	// ToNoChange means a transition ends in the same state it started in (just retriggers state cb)
 	ToNoChange() EventBuilder
+	// ToJustRecord means a transition ends in the same state it started in (and DOES NOT retrigger state cb)
+	ToJustRecord() EventBuilder
 }
 
 // EventBuilder is an interface for describing events in an fsm and
