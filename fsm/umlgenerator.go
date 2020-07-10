@@ -178,7 +178,7 @@ func generateFromAnyEventsDeclaration(w io.Writer, anyEvents []anyEventDecl, sta
 
 func generateJustRecordEventsDeclarations(w io.Writer, justRecordEvents map[StateKey][]EventName, stateNameMap reflect.Value, eventNameMap reflect.Value) error {
 	for state, events := range justRecordEvents {
-		if _, err := fmt.Fprintf(w, "\n\tnote right of %v : The following events only record in this state.", state); err != nil {
+		if _, err := fmt.Fprintf(w, "\n\tnote left of %v : The following events only record in this state.<br>", state); err != nil {
 			return err
 		}
 		for _, event := range events {

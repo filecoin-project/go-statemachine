@@ -47,7 +47,7 @@ var expectedString = `stateDiagram-v2
 	1 --> 3 : Finish!
 	2 --> 3 : Finish!
 
-	note right of 2 : The following events only record in this state.<br>Just Record!
+	note left of 2 : The following events only record in this state.<br><br>Just Record!
 
 	3 --> [*]
 `
@@ -73,7 +73,7 @@ var expectedStringWithoutAny = `stateDiagram-v2
 	1 --> 1 : Resume!
 	2 --> 2 : Resume!
 
-	note right of 2 : The following events only record in this state.<br>Just Record!
+	note left of 2 : The following events only record in this state.<br><br>Just Record!
 
 	3 --> [*]
 `
