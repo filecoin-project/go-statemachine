@@ -160,3 +160,8 @@ func (s *StateGroup) List(out interface{}) error {
 func (s *StateGroup) Get(id interface{}) *statestore.StoredState {
 	return s.sts.Get(id)
 }
+
+// Has indicates whether there is data for the given state machine
+func (s *StateGroup) Has(id interface{}) (bool, error) {
+	return s.sts.Has(id)
+}
