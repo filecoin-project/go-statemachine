@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/filecoin-project/go-statestore"
+	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
 // EventName is the name of an event
@@ -111,6 +112,10 @@ type Group interface {
 
 	// Get gets state for a single state machine
 	Get(id interface{}) *statestore.StoredState
+
+	// GetSync will make sure all events present at the time of the call are processed before
+	// returning a value, which is read into out
+	GetSync(ctx context.Context, id interface{}, value cbg.CBORUnmarshaler) error
 
 	// Has indicates whether there is data for the given state machine
 	Has(id interface{}) (bool, error)

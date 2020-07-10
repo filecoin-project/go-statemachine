@@ -84,6 +84,9 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 		return nil, uint64(len(events)), statemachine.ErrTerminated
 	}
 	eventName, err := d.eventProcessor.Apply(events[0], user)
+	if _, ok := eventName.(nilEvent); ok {
+		return nil, 1, nil
+	}
 	if err != nil {
 		log.Errorf("Executing event planner failed: %+v", err)
 		return nil, 1, nil

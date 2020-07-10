@@ -446,6 +446,35 @@ func TestSyncEventHandling(t *testing.T) {
 
 }
 
+func TestGetSync(t *testing.T) {
+	ctx := context.Background()
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
+
+	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+
+	// setup with no state entry funcs, so that B just sets the value
+	params := fsm.Parameters{
+		Environment:     te,
+		StateType:       statemachine.TestState{},
+		StateKeyField:   "A",
+		Events:          events,
+		StateEntryFuncs: fsm.StateEntryFuncs{},
+		FinalityStates:  []fsm.StateKey{uint64(3)},
+		Notifier:        nil,
+	}
+	smm, err := fsm.New(ds, params)
+	require.NoError(t, err)
+
+	smm.Send(uint64(2), "start")
+	for i := 0; i < 100; i++ {
+		smm.Send(uint64(2), "restart")
+		smm.Send(uint64(2), "b", uint64(i))
+		var ts statemachine.TestState
+		smm.GetSync(ctx, uint64(2), &ts)
+		require.Equal(t, ts.B, uint64(i))
+	}
+}
+
 func TestNotification(t *testing.T) {
 	notifications := new(uint64)
 

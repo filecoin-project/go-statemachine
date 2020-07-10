@@ -5,6 +5,7 @@ import (
 
 	"github.com/filecoin-project/go-statemachine"
 	"github.com/ipfs/go-datastore"
+	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 )
 
@@ -41,6 +42,16 @@ func (s *stateGroup) Send(id interface{}, name EventName, args ...interface{}) (
 // IsTerminated returns true if a StateType is in a FinalityState
 func (s *stateGroup) IsTerminated(out StateType) bool {
 	return s.d.reachedFinalityState(out)
+}
+
+// GetSync will make sure all events present at the time of the call are processed before
+// returning a value, which is read into out
+func (s *stateGroup) GetSync(ctx context.Context, id interface{}, out cbg.CBORUnmarshaler) error {
+	err := s.SendSync(ctx, id, nilEvent{})
+	if err != nil {
+		return err
+	}
+	return s.Get(id).Get(out)
 }
 
 // SendSync sends the given event name and parameters to the state specified by id
