@@ -35,7 +35,7 @@ var expectedString = `stateDiagram-v2
 	2 : On entry runs handleB
 	[*] --> 0
 	note right of 2
-		These events only record in this state (no handler triggered): 
+		The following events only record in this state.
 
 		Just Record!
 	end note
@@ -69,7 +69,7 @@ var expectedStringWithoutAny = `stateDiagram-v2
 		Finish! - transitions state to Final State
 	end note
 	note right of 2
-		These events only record in this state (no handler triggered): 
+		The following events only record in this state.
 
 		Just Record!
 	end note
