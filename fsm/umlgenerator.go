@@ -178,16 +178,19 @@ func generateFromAnyEventsDeclaration(w io.Writer, anyEvents []anyEventDecl, sta
 
 func generateJustRecordEventsDeclarations(w io.Writer, justRecordEvents map[StateKey][]EventName, stateNameMap reflect.Value, eventNameMap reflect.Value) error {
 	for state, events := range justRecordEvents {
-		if _, err := fmt.Fprintf(w, "\tnote right of %v\n\t\tThe following events only record in this state.\n\n", state); err != nil {
+		if _, err := fmt.Fprintf(w, "\n\tnote right of %v : The following events only record in this state.", state); err != nil {
 			return err
 		}
 		for _, event := range events {
+			if _, err := fmt.Fprintf(w, "<br>"); err != nil {
+				return err
+			}
 			eventName := eventNameMap.MapIndex(reflect.ValueOf(event))
-			if _, err := fmt.Fprintf(w, "\t\t%s\n", eventName); err != nil {
+			if _, err := fmt.Fprintf(w, "%s", eventName); err != nil {
 				return err
 			}
 		}
-		if _, err := fmt.Fprintf(w, "\tend note\n\n"); err != nil {
+		if _, err := fmt.Fprintf(w, "\n\n"); err != nil {
 			return err
 		}
 	}
