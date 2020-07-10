@@ -604,6 +604,7 @@ func TestJustRecordHandler(t *testing.T) {
 
 	var ts statemachine.TestState
 	err = smm.GetSync(context.Background(), uint64(2), &ts)
+	require.NoError(t, err)
 	require.Equal(t, uint64(1000000), ts.B)
 }
 
