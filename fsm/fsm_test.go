@@ -465,12 +465,19 @@ func TestGetSync(t *testing.T) {
 	smm, err := fsm.New(ds, params)
 	require.NoError(t, err)
 
-	smm.Send(uint64(2), "start")
+	err = smm.Send(uint64(2), "start")
+	require.NoError(t, err)
 	for i := 0; i < 100; i++ {
-		smm.Send(uint64(2), "restart")
-		smm.Send(uint64(2), "b", uint64(i))
+		err = smm.Send(uint64(2), "restart")
+		require.NoError(t, err)
+
+		err = smm.Send(uint64(2), "b", uint64(i))
+		require.NoError(t, err)
+
 		var ts statemachine.TestState
-		smm.GetSync(ctx, uint64(2), &ts)
+		err = smm.GetSync(ctx, uint64(2), &ts)
+		require.NoError(t, err)
+
 		require.Equal(t, ts.B, uint64(i))
 	}
 }
