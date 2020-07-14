@@ -48,6 +48,8 @@ type fsmEvent struct {
 	returnChannel chan error
 }
 
+type nilEvent struct{}
+
 // NewEventProcessor returns a new event machine for the given state and event list
 func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []EventBuilder) (EventProcessor, error) {
 	err := VerifyEventParameters(state, stateKeyField, events)
@@ -90,6 +92,9 @@ func NewEventProcessor(state StateType, stateKeyField StateKeyField, events []Ev
 
 // Event generates an event that can be dispatched to go-statemachine from the given event name and context args
 func (em eventProcessor) Generate(ctx context.Context, event EventName, returnChannel chan error, args ...interface{}) (interface{}, error) {
+	if _, ok := event.(nilEvent); ok {
+		return fsmEvent{event, nil, ctx, returnChannel}, nil
+	}
 	cb, ok := em.callbacks[event]
 	if !ok {
 		return fsmEvent{}, xerrors.Errorf("Unknown event `%+v`", event)
@@ -106,12 +111,16 @@ func (em eventProcessor) Generate(ctx context.Context, event EventName, returnCh
 }
 
 func (em eventProcessor) Apply(evt statemachine.Event, user interface{}) (EventName, error) {
-	userValue := reflect.ValueOf(user)
-	currentState := userValue.Elem().FieldByName(string(em.stateKeyField)).Interface()
 	e, ok := evt.User.(fsmEvent)
 	if !ok {
 		return nil, xerrors.New("Not an fsm event")
 	}
+	if _, ok := e.name.(nilEvent); ok {
+		return e.name, completeEvent(e, nil)
+	}
+	userValue := reflect.ValueOf(user)
+	currentState := userValue.Elem().FieldByName(string(em.stateKeyField)).Interface()
+
 	destination, ok := em.transitions[eKey{e.name, currentState}]
 	// check for fallback transition for any source state
 	if !ok {
