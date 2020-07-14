@@ -39,6 +39,10 @@ var events = fsm.Events{
 		},
 	),
 	fsm.Event("resume").FromMany(uint64(1), uint64(2)).ToNoChange(),
+	fsm.Event("justrecord").FromMany(uint64(2)).ToJustRecord().Action(func(state *statemachine.TestState) error {
+		state.B = uint64(1000000)
+		return nil
+	}),
 	fsm.Event("any").FromAny().To(uint64(1)),
 	fsm.Event("finish").FromAny().To(uint64(3)),
 }
@@ -580,6 +584,28 @@ func TestNoChangeHandler(t *testing.T) {
 	err = smm.Send(uint64(2), "resume")
 	require.NoError(t, err)
 	<-te.done
+}
+
+func TestJustRecordHandler(t *testing.T) {
+	ds := dss.MutexWrap(datastore.NewMapDatastore())
+
+	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{}), universalCalls: 0}
+	close(te.proceed)
+	smm, err := newFsm(ds, te)
+	require.NoError(t, err)
+
+	err = smm.Send(uint64(2), "start")
+	require.NoError(t, err)
+	<-te.done
+
+	// call just record to change value but should not reclose done channel
+	err = smm.Send(uint64(2), "justrecord")
+	require.NoError(t, err)
+
+	var ts statemachine.TestState
+	err = smm.GetSync(context.Background(), uint64(2), &ts)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1000000), ts.B)
 }
 
 func TestAllStateEvent(t *testing.T) {

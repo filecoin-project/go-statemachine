@@ -75,7 +75,7 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 		}
 	}
 
-	events, anyEvents := prepareEvents(parameters.Events, parameters.FinalityStates, states, includeFromAny)
+	events, anyEvents, justRecordEvents := prepareEvents(parameters.Events, parameters.FinalityStates, states, includeFromAny)
 
 	if err := generateFromAnyEventsDeclaration(w, anyEvents, states[0], stateNameMapValue, eventNameMapValue); err != nil {
 		return err
@@ -85,6 +85,10 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 		if err := generateTransitionDeclaration(w, event.start, event.end, event.name, eventNameMapValue); err != nil {
 			return err
 		}
+	}
+
+	if err := generateJustRecordEventsDeclarations(w, justRecordEvents, stateNameMapValue, eventNameMapValue); err != nil {
+		return err
 	}
 
 	for _, state := range parameters.FinalityStates {
@@ -153,7 +157,11 @@ func generateFromAnyEventsDeclaration(w io.Writer, anyEvents []anyEventDecl, sta
 	}
 	for _, anyEvent := range anyEvents {
 		eventName := eventNameMap.MapIndex(reflect.ValueOf(anyEvent.name))
-		if anyEvent.end == nil {
+		if _, ok := anyEvent.end.(recordEvent); ok {
+			if _, err := fmt.Fprintf(w, "\t\t%s - just records\n", eventName); err != nil {
+				return err
+			}
+		} else if anyEvent.end == nil {
 			if _, err := fmt.Fprintf(w, "\t\t%s - does not transition state\n", eventName); err != nil {
 				return err
 			}
@@ -166,6 +174,27 @@ func generateFromAnyEventsDeclaration(w io.Writer, anyEvents []anyEventDecl, sta
 	}
 	_, err := fmt.Fprintf(w, "\tend note\n")
 	return err
+}
+
+func generateJustRecordEventsDeclarations(w io.Writer, justRecordEvents map[StateKey][]EventName, stateNameMap reflect.Value, eventNameMap reflect.Value) error {
+	for state, events := range justRecordEvents {
+		if _, err := fmt.Fprintf(w, "\n\tnote left of %v : The following events only record in this state.<br>", state); err != nil {
+			return err
+		}
+		for _, event := range events {
+			if _, err := fmt.Fprintf(w, "<br>"); err != nil {
+				return err
+			}
+			eventName := eventNameMap.MapIndex(reflect.ValueOf(event))
+			if _, err := fmt.Fprintf(w, "%s", eventName); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintf(w, "\n\n"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func generateStartStateDeclaration(w io.Writer, state StateKey) error {
@@ -206,7 +235,8 @@ func prepareStates(events []EventBuilder, stateCmp func(a, b StateKey) bool) []S
 			if src != nil {
 				states = appendIfMissing(states, src)
 			}
-			if dst != nil {
+			_, justRecord := dst.(recordEvent)
+			if dst != nil && !justRecord {
 				states = appendIfMissing(states, dst)
 			}
 		}
@@ -253,9 +283,10 @@ func getNonFinalityStates(states []StateKey, finalityStates []StateKey) []StateK
 	return nonFinalityStates
 }
 
-func prepareEvents(srcEvents []EventBuilder, finalityStates []StateKey, states []StateKey, includeFromAny bool) ([]eventDecl, []anyEventDecl) {
+func prepareEvents(srcEvents []EventBuilder, finalityStates []StateKey, states []StateKey, includeFromAny bool) ([]eventDecl, []anyEventDecl, map[StateKey][]EventName) {
 	var events []eventDecl
 	var anyEvents []anyEventDecl
+	justRecordEvents := make(map[StateKey][]EventName)
 	nonFinalityStates := getNonFinalityStates(states, finalityStates)
 	for _, evtIface := range srcEvents {
 		evt := evtIface.(eventBuilder)
@@ -263,7 +294,9 @@ func prepareEvents(srcEvents []EventBuilder, finalityStates []StateKey, states [
 		if ok {
 			if includeFromAny {
 				for _, state := range nonFinalityStates {
-					if dst == nil {
+					if _, ok := dst.(recordEvent); ok {
+						justRecordEvents[state] = append(justRecordEvents[state], evt.name)
+					} else if dst == nil {
 						events = append(events, eventDecl{state, state, evt.name})
 					} else {
 						events = append(events, eventDecl{state, dst, evt.name})
@@ -276,7 +309,9 @@ func prepareEvents(srcEvents []EventBuilder, finalityStates []StateKey, states [
 		for _, src := range states {
 			dst, ok := evt.transitionsSoFar[src]
 			if ok {
-				if dst == nil {
+				if _, ok := dst.(recordEvent); ok {
+					justRecordEvents[src] = append(justRecordEvents[src], evt.name)
+				} else if dst == nil {
 					events = append(events, eventDecl{src, src, evt.name})
 				} else {
 					events = append(events, eventDecl{src, dst, evt.name})
@@ -284,5 +319,5 @@ func prepareEvents(srcEvents []EventBuilder, finalityStates []StateKey, states [
 			}
 		}
 	}
-	return events, anyEvents
+	return events, anyEvents, justRecordEvents
 }

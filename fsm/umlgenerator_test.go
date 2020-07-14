@@ -17,12 +17,13 @@ var stateNameMap = map[uint64]string{
 }
 
 var eventNameMap = map[string]string{
-	"start":   "Start!",
-	"restart": "Restart!",
-	"b":       "B!",
-	"resume":  "Resume!",
-	"any":     "Any!",
-	"finish":  "Finish!",
+	"start":      "Start!",
+	"restart":    "Restart!",
+	"b":          "B!",
+	"resume":     "Resume!",
+	"justrecord": "Just Record!",
+	"any":        "Any!",
+	"finish":     "Finish!",
 }
 
 var expectedString = `stateDiagram-v2
@@ -45,6 +46,9 @@ var expectedString = `stateDiagram-v2
 	0 --> 3 : Finish!
 	1 --> 3 : Finish!
 	2 --> 3 : Finish!
+
+	note left of 2 : The following events only record in this state.<br><br>Just Record!
+
 	3 --> [*]
 `
 
@@ -68,6 +72,9 @@ var expectedStringWithoutAny = `stateDiagram-v2
 	1 --> 2 : B!
 	1 --> 1 : Resume!
 	2 --> 2 : Resume!
+
+	note left of 2 : The following events only record in this state.<br><br>Just Record!
+
 	3 --> [*]
 `
 

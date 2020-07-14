@@ -62,7 +62,8 @@ func VerifyEventParameters(state StateType, stateKeyField StateKeyField, events 
 			return err
 		}
 		for src, dst := range evt.transitionsSoFar {
-			if dst != nil && !reflect.TypeOf(dst).AssignableTo(stateFieldType.Type) {
+			_, justRecord := dst.(recordEvent)
+			if dst != nil && !justRecord && !reflect.TypeOf(dst).AssignableTo(stateFieldType.Type) {
 				return xerrors.Errorf("event `%+v` destination type is not assignable to: %s", name, stateFieldType.Type.Name())
 			}
 			if src != nil && !reflect.TypeOf(src).AssignableTo(stateFieldType.Type) {
