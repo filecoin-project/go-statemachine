@@ -48,7 +48,7 @@ func (s *stateGroup) IsTerminated(out StateType) bool {
 // returning a value, which is read into out
 func (s *stateGroup) GetSync(ctx context.Context, id interface{}, out cbg.CBORUnmarshaler) error {
 	err := s.SendSync(ctx, id, nilEvent{})
-	if err != nil {
+	if err != nil && err != statemachine.ErrTerminated {
 		return err
 	}
 	return s.Get(id).Get(out)
