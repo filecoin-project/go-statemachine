@@ -50,9 +50,10 @@ type fsmEvent struct {
 
 type nilEvent struct{}
 
-type justRecordError struct{}
+// ErrSkipHandler is a sentinel type that indicates not an error but that we should skip any state handlers present
+type ErrSkipHandler struct{}
 
-func (e justRecordError) Error() string {
+func (e ErrSkipHandler) Error() string {
 	return "record event does not get handler"
 }
 
@@ -141,7 +142,7 @@ func (em eventProcessor) Apply(evt statemachine.Event, user interface{}) (EventN
 		return nil, completeEvent(e, err)
 	}
 	if _, ok := destination.(recordEvent); ok {
-		return e.name, completeEvent(e, justRecordError{})
+		return e.name, completeEvent(e, ErrSkipHandler{})
 	}
 	if destination != nil {
 		userValue.Elem().FieldByName(string(em.stateKeyField)).Set(reflect.ValueOf(destination))

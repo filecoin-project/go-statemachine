@@ -49,7 +49,9 @@ func (tc *TestContext) Trigger(event fsm.EventName, args ...interface{}) error {
 func (tc *TestContext) ReplayEvents(t *testing.T, user interface{}) {
 	for _, evt := range tc.dispatchedEvents {
 		_, err := tc.eventProcessor.Apply(evt, user)
-		require.NoError(t, err)
+		noError := err == nil
+		_, skipHandler := err.(fsm.ErrSkipHandler)
+		require.True(t, noError || skipHandler)
 	}
 }
 

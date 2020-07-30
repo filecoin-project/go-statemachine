@@ -87,8 +87,8 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 	if _, ok := eventName.(nilEvent); ok {
 		return nil, 1, nil
 	}
-	_, justRecord := err.(justRecordError)
-	if err != nil && !justRecord {
+	_, skipHandler := err.(ErrSkipHandler)
+	if err != nil && !skipHandler {
 		log.Errorf("Executing event planner failed: %+v", err)
 		return nil, 1, nil
 	}
@@ -101,7 +101,7 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 		d.eventProcessor.ClearEvents(events[1:], statemachine.ErrTerminated)
 		return nil, uint64(len(events)), statemachine.ErrTerminated
 	}
-	if justRecord {
+	if skipHandler {
 		return d.handler(nil), 1, nil
 	}
 	return d.handler(d.stateEntryFuncs[currentState]), 1, nil
