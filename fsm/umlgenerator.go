@@ -87,7 +87,7 @@ func GenerateUML(w io.Writer, syntaxType SyntaxType, parameters Parameters, stat
 		}
 	}
 
-	if err := generateJustRecordEventsDeclarations(w, justRecordEvents, stateNameMapValue, eventNameMapValue); err != nil {
+	if err := generateJustRecordEventsDeclarations(w, states, justRecordEvents, stateNameMapValue, eventNameMapValue); err != nil {
 		return err
 	}
 
@@ -176,8 +176,12 @@ func generateFromAnyEventsDeclaration(w io.Writer, anyEvents []anyEventDecl, sta
 	return err
 }
 
-func generateJustRecordEventsDeclarations(w io.Writer, justRecordEvents map[StateKey][]EventName, stateNameMap reflect.Value, eventNameMap reflect.Value) error {
-	for state, events := range justRecordEvents {
+func generateJustRecordEventsDeclarations(w io.Writer, states []StateKey, justRecordEvents map[StateKey][]EventName, stateNameMap reflect.Value, eventNameMap reflect.Value) error {
+	for _, state := range states {
+		events, ok := justRecordEvents[state]
+		if !ok {
+			continue
+		}
 		if _, err := fmt.Fprintf(w, "\n\tnote left of %v : The following events only record in this state.<br>", state); err != nil {
 			return err
 		}
