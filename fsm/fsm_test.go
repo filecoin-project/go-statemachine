@@ -44,6 +44,7 @@ var events = fsm.Events{
 		return nil
 	}),
 	fsm.Event("any").FromAny().To(uint64(1)),
+	fsm.Event("justrecord2").From(uint64(1)).ToJustRecord(),
 	fsm.Event("finish").FromAny().To(uint64(3)),
 }
 
