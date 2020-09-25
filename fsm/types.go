@@ -3,7 +3,6 @@ package fsm
 import (
 	"context"
 
-	"github.com/filecoin-project/go-statestore"
 	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
@@ -96,6 +95,13 @@ type StateEntryFuncs map[StateKey]StateEntryFunc
 // with the even that triggered it
 type Notifier func(eventName EventName, state StateType)
 
+// StoredState is an abstraction for the stored state returned by the statestore
+type StoredState interface {
+	End() error
+	Get(out cbg.CBORUnmarshaler) error
+	Mutate(mutator interface{}) error
+}
+
 // Group is a manager of a group of states that follows finite state machine logic
 type Group interface {
 
@@ -113,7 +119,7 @@ type Group interface {
 	SendSync(ctx context.Context, id interface{}, name EventName, args ...interface{}) (err error)
 
 	// Get gets state for a single state machine
-	Get(id interface{}) *statestore.StoredState
+	Get(id interface{}) StoredState
 
 	// GetSync will make sure all events present at the time of the call are processed before
 	// returning a value, which is read into out
