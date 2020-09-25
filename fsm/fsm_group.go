@@ -44,6 +44,11 @@ func (s *stateGroup) IsTerminated(out StateType) bool {
 	return s.d.reachedFinalityState(out)
 }
 
+// Get gets state for a single state machine
+func (s *stateGroup) Get(id interface{}) StoredState {
+	return s.StateGroup.Get(id)
+}
+
 // GetSync will make sure all events present at the time of the call are processed before
 // returning a value, which is read into out
 func (s *stateGroup) GetSync(ctx context.Context, id interface{}, out cbg.CBORUnmarshaler) error {
