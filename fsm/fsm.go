@@ -5,7 +5,7 @@ import (
 	"reflect"
 
 	"github.com/filecoin-project/go-statemachine"
-	logging "github.com/ipfs/go-log"
+	logging "github.com/ipfs/go-log/v2"
 )
 
 var log = logging.Logger("fsm")
