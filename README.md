@@ -35,7 +35,7 @@ The planner generally:
 - constructs a function that will perform additional actions based on the new state
 
 It returns:
-1. The next actions handler-- should have the signature func(ctx Context, st <T>) error), where <T> is the typeOf(user) param
+1. The next actions handler-- should have the signature `func(ctx Context, st <T>) error)`, where `<T>` is the `typeOf(user)` param
 2. The number of events processed
 3. An error if occured
 
