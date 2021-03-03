@@ -89,7 +89,7 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 	}
 	_, skipHandler := err.(ErrSkipHandler)
 	if err != nil && !skipHandler {
-		log.Errorf("Executing event planner failed: %+v", err)
+		log.Errorf("Executing event planner failed for %s: %+v", d.stateType.Name(), err)
 		return nil, 1, nil
 	}
 	currentState := userValue.Elem().FieldByName(string(d.stateKeyField)).Interface()
