@@ -3,6 +3,7 @@ package fsm
 import (
 	"context"
 	"reflect"
+	"time"
 
 	"github.com/filecoin-project/go-statemachine"
 	logging "github.com/ipfs/go-log"
@@ -37,7 +38,6 @@ func NewFSMHandler(parameters Parameters) (statemachine.StateHandler, error) {
 		return nil, err
 	}
 	stateType := reflect.TypeOf(parameters.StateType)
-
 	eventProcessor, err := NewEventProcessor(parameters.StateType, parameters.StateKeyField, parameters.Events)
 	if err != nil {
 		return nil, err
@@ -94,7 +94,14 @@ func (d fsmHandler) Plan(events []statemachine.Event, user interface{}) (interfa
 	}
 	currentState := userValue.Elem().FieldByName(string(d.stateKeyField)).Interface()
 	if d.notifier != nil {
+		currentTime := time.Now()
 		d.notifications <- notification{eventName, userValue.Elem().Interface()}
+		elapsed := time.Since(currentTime)
+		if elapsed > maxExpectedEventProcessingTime {
+			log.Warnw("notification queued", "fsmType", d.stateType.Name(), "eventName", eventName, "queueTime", elapsed)
+		} else {
+			log.Debugw("notification queued", "fsmType", d.stateType.Name(), "eventName", eventName, "queueTime", elapsed)
+		}
 	}
 	_, final := d.finalityStates[currentState]
 	if final {
@@ -114,6 +121,8 @@ func (d fsmHandler) reachedFinalityState(user interface{}) bool {
 	return final
 }
 
+const maxExpectedEventProcessingTime = 50 * time.Millisecond
+
 // Init will start up a goroutine which processes the notification queue
 // in order
 func (d fsmHandler) Init(closing <-chan struct{}) {
@@ -124,7 +133,14 @@ func (d fsmHandler) Init(closing <-chan struct{}) {
 			for {
 				select {
 				case n := <-toProcess:
+					startTime := time.Now()
 					d.notifier(n.eventName, n.state)
+					processingTime := time.Since(startTime)
+					if processingTime > maxExpectedEventProcessingTime {
+						log.Warnw("fsm listeners processed", "fsmType", d.stateType.Name(), "eventName", n.eventName, "processingTime", processingTime)
+					} else {
+						log.Debugw("fsm listeners processed", "fsmType", d.stateType.Name(), "eventName", n.eventName, "processingTime", processingTime)
+					}
 				case <-closing:
 					return
 				}
@@ -147,6 +163,7 @@ func (d fsmHandler) Init(closing <-chan struct{}) {
 				select {
 				case n := <-d.notifications:
 					queue = append(queue, n)
+					log.Debugw("unprocessed state machine notifications", "fsmType", d.stateType.Name(), "total", len(queue))
 				case outgoing() <- nextNotification():
 					queue = queue[1:]
 				case <-closing:
