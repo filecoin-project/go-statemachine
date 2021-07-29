@@ -98,17 +98,19 @@ func (fsm *StateMachine) run() {
 			}
 
 			go func() {
+				defer func() {
+					atomic.StoreInt32(&fsm.busy, 0)
+					fsm.stageDone <- struct{}{}
+				}()
+
 				if nextStep != nil {
 					res := reflect.ValueOf(nextStep).Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(ustate).Elem()})
 
 					if res[0].Interface() != nil {
-						atomic.StoreInt32(&fsm.busy, 0)
 						log.Errorf("executing step: %+v", res[0].Interface().(error)) // TODO: propagate top level
 						return
 					}
 				}
-				atomic.StoreInt32(&fsm.busy, 0)
-				fsm.stageDone <- struct{}{}
 			}()
 
 		}
