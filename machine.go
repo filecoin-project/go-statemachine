@@ -8,7 +8,7 @@ import (
 	"github.com/filecoin-project/go-statestore"
 	xerrors "golang.org/x/xerrors"
 
-	logging "github.com/ipfs/go-log"
+	logging "github.com/ipfs/go-log/v2"
 )
 
 var log = logging.Logger("evtsm")
@@ -53,6 +53,7 @@ func (fsm *StateMachine) run() {
 		select {
 		case evt := <-fsm.eventsIn:
 			pendingEvents = append(pendingEvents, evt)
+			log.Debugw("appended new pending evt", "len(pending)", len(pendingEvents))
 		case <-fsm.stageDone:
 			if len(pendingEvents) == 0 {
 				continue
@@ -62,6 +63,8 @@ func (fsm *StateMachine) run() {
 		}
 
 		if atomic.CompareAndSwapInt32(&fsm.busy, 0, 1) {
+			log.Debugw("sm run in critical zone", "len(pending)", len(pendingEvents))
+
 			var nextStep interface{}
 			var ustate interface{}
 			var processed uint64
