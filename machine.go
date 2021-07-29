@@ -6,9 +6,8 @@ import (
 	"sync/atomic"
 
 	"github.com/filecoin-project/go-statestore"
-	xerrors "golang.org/x/xerrors"
-
-	logging "github.com/ipfs/go-log"
+	logging "github.com/ipfs/go-log/v2"
+	"golang.org/x/xerrors"
 )
 
 var log = logging.Logger("evtsm")

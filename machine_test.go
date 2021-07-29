@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/ipfs/go-datastore"
-	logging "github.com/ipfs/go-log"
+	logging "github.com/ipfs/go-log/v2"
 	"gotest.tools/assert"
 )
 

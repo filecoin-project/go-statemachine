@@ -12,7 +12,7 @@ commands:
   install-deps:
     steps:
       - go/install-ssh
-      - go/install: {package: git}
+      - go/install: { package: git }
   prepare:
     parameters:
       linux:
