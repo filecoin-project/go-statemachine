@@ -62,6 +62,12 @@ func (fsm *StateMachine) run() {
 			return
 		}
 
+		select {
+		case <-fsm.closing:
+			return
+		default:
+		}
+
 		if atomic.CompareAndSwapInt32(&fsm.busy, 0, 1) {
 			log.Debugw("sm run in critical zone", "len(pending)", len(pendingEvents))
 
@@ -102,7 +108,6 @@ func (fsm *StateMachine) run() {
 
 			go func() {
 				defer log.Debugw("leaving critical zone and resetting atomic var to zero", "len(pending)", len(pendingEvents))
-
 
 				if nextStep != nil {
 					res := reflect.ValueOf(nextStep).Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(ustate).Elem()})
