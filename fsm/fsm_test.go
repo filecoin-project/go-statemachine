@@ -16,6 +16,7 @@ import (
 
 	"github.com/filecoin-project/go-statemachine"
 	"github.com/filecoin-project/go-statemachine/fsm"
+	"github.com/filecoin-project/go-statemachine/testbus"
 )
 
 func init() {
@@ -70,7 +71,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	ds := dss.MutexWrap(datastore.NewMapDatastore())
 	te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 	t.Run("Bad state field", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:     te,
 			StateType:       statemachine.TestState{},
 			StateKeyField:   "Jesus",
@@ -82,7 +83,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "state type has no field `Jesus`")
 	})
 	t.Run("State field not comparable", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:     te,
 			StateType:       statemachine.TestState{},
 			StateKeyField:   "C",
@@ -94,7 +95,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "state field `C` is not comparable")
 	})
 	t.Run("Event description has bad source type", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment: te,
 
 			StateType:       statemachine.TestState{},
@@ -107,7 +108,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `start` source type is not assignable to: uint64")
 	})
 	t.Run("Event description has bad destination type", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment: te,
 
 			StateType:       statemachine.TestState{},
@@ -120,7 +121,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `start` destination type is not assignable to: uint64")
 	})
 	t.Run("Event description has callback that is not a function", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:     te,
 			StateType:       statemachine.TestState{},
 			StateKeyField:   "A",
@@ -132,7 +133,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` has a callback that is not a function")
 	})
 	t.Run("Event description has callback with no parameters", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:     te,
 			StateType:       statemachine.TestState{},
 			StateKeyField:   "A",
@@ -144,7 +145,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
 	})
 	t.Run("Event description has callback with wrong first parameter", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -158,7 +159,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` has a callback that does not take the state")
 	})
 	t.Run("Event description has callback that doesn't return an error", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -172,7 +173,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "event `b` callback should return exactly one param that is an error")
 	})
 	t.Run("Event description has transition source twice", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -186,7 +187,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "duplicate transition source `1` for event `b`")
 	})
 	t.Run("Event description has overlapping transition source twice", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -200,7 +201,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "duplicate transition source `1` for event `b`")
 	})
 	t.Run("Event description has from any source twice", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -214,7 +215,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "duplicate all-sources destination for event `b`")
 	})
 	t.Run("Event description has callback defined twice", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -232,7 +233,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "duplicate action for event `b`")
 	})
 	t.Run("State Handler with bad stateKey", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -251,7 +252,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "state key is not assignable to: uint64")
 	})
 	t.Run("State Handler is not a function", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -265,7 +266,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "handler for state is not a function")
 	})
 	t.Run("State Handler has wrong parameter count", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -281,7 +282,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "handler for state does not take correct number of arguments")
 	})
 	t.Run("State Handler has no context parameter", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -297,7 +298,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "handler for state does not match context parameter")
 	})
 	t.Run("State Handler has wrong environment parameter", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -313,7 +314,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 		require.EqualError(t, err, "handler for state does not match environment parameter")
 	})
 	t.Run("State Handler has wrong state parameter", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -330,7 +331,7 @@ func TestTypeCheckingOnSetup(t *testing.T) {
 	})
 
 	t.Run("State Handler has wrong return", func(t *testing.T) {
-		smm, err := fsm.New(ds, fsm.Parameters{
+		smm, err := fsm.New("test", ds, &testbus.TestCollection{}, fsm.Parameters{
 			Environment:   te,
 			StateType:     statemachine.TestState{},
 			StateKeyField: "A",
@@ -356,7 +357,7 @@ func newFsm(ds datastore.Datastore, te *testEnvironment) (fsm.Group, error) {
 		FinalityStates:  []fsm.StateKey{uint64(3)},
 		Notifier:        nil,
 	}
-	return fsm.New(ds, defaultFsmParams)
+	return fsm.New("test", ds, &testbus.TestCollection{}, defaultFsmParams)
 }
 
 func TestArgumentChecks(t *testing.T) {
@@ -467,7 +468,7 @@ func TestGetSync(t *testing.T) {
 		FinalityStates:  []fsm.StateKey{uint64(3)},
 		Notifier:        nil,
 	}
-	smm, err := fsm.New(ds, params)
+	smm, err := fsm.New("test", ds, &testbus.TestCollection{}, params)
 	require.NoError(t, err)
 
 	err = smm.Send(uint64(2), "start")
@@ -506,7 +507,7 @@ func TestNotification(t *testing.T) {
 		StateEntryFuncs: stateEntryFuncs,
 		Notifier:        notifier,
 	}
-	smm, err := fsm.New(ds, params)
+	smm, err := fsm.New("test", ds, &testbus.TestCollection{}, params)
 	require.NoError(t, err)
 
 	err = smm.Send(uint64(2), "start")
@@ -553,7 +554,7 @@ func TestSerialNotification(t *testing.T) {
 		StateEntryFuncs: fsm.StateEntryFuncs{},
 		Notifier:        notifier,
 	}
-	smm, err := fsm.New(ds, params)
+	smm, err := fsm.New("test", ds, &testbus.TestCollection{}, params)
 	require.NoError(t, err)
 
 	// send all the events in order

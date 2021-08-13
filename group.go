@@ -2,11 +2,12 @@ package statemachine
 
 import (
 	"context"
-	"reflect"
-	"sync"
 
+	core "github.com/filecoin-project/go-statemachine/internal"
 	"github.com/filecoin-project/go-statestore"
 	"github.com/ipfs/go-datastore"
+	logging "github.com/ipfs/go-log"
+	eventbus "github.com/protocol/hack-the-bus"
 	"golang.org/x/xerrors"
 )
 
@@ -20,61 +21,62 @@ type StateHandlerWithInit interface {
 	Init(<-chan struct{})
 }
 
+var log = logging.Logger("evtsm")
+
+var ErrTerminated = xerrors.New("normal shutdown of state machine")
+
+type Event struct {
+	User interface{}
+}
+
+type internalEvent struct{ systemName string }
+
+// Planner processes in queue events
+// It returns:
+// 1. a handler of type -- func(ctx Context, st <T>) (func(*<T>), error), where <T> is the typeOf(User) param
+// 2. the number of events processed
+// 3. an error if occured
+type Planner func(events []Event, user interface{}) (interface{}, uint64, error)
+
 // StateGroup manages a group of state machines sharing the same logic
 type StateGroup struct {
-	sts       *statestore.StateStore
-	hnd       StateHandler
-	stateType reflect.Type
-
-	closing      chan struct{}
-	initNotifier sync.Once
-
-	lk  sync.Mutex
-	sms map[datastore.Key]*StateMachine
+	group *core.StateGroup
 }
 
 // stateType: T - (MyStateStruct{})
-func New(ds datastore.Datastore, hnd StateHandler, stateType interface{}) *StateGroup {
-	return &StateGroup{
-		sts:       statestore.New(ds),
-		hnd:       hnd,
-		stateType: reflect.TypeOf(stateType),
-		closing:   make(chan struct{}),
-		sms:       map[datastore.Key]*StateMachine{},
+func New(systemName string, ds datastore.Datastore, eventBusCollection eventbus.Collection, hnd StateHandler, stateType interface{}) *StateGroup {
+	var initFn core.InitFn
+	if initter, ok := hnd.(StateHandlerWithInit); ok {
+		initFn = initter.Init
 	}
-}
-
-func (s *StateGroup) init() {
-	initter, ok := s.hnd.(StateHandlerWithInit)
-	if ok {
-		initter.Init(s.closing)
+	planner := func(events []eventbus.Event, user interface{}) (interface{}, uint64, error) {
+		internalEvents := make([]Event, 0, len(events))
+		for _, event := range events {
+			internalEvents = append(internalEvents, event.Data().(Event))
+		}
+		return hnd.Plan(internalEvents, user)
+	}
+	createContextFn := func(ctx context.Context, sm *core.StateMachine) interface{} {
+		return Context{
+			ctx:        ctx,
+			sm:         sm,
+			systemName: systemName,
+		}
+	}
+	group := core.New(systemName, ds, eventBusCollection, planner, initFn, createContextFn, stateType)
+	return &StateGroup{
+		group: group,
 	}
 }
 
 // Begin initiates tracking with a specific value for a given identifier
 func (s *StateGroup) Begin(id interface{}, userState interface{}) error {
-	s.lk.Lock()
-	defer s.lk.Unlock()
-
-	sm, exist := s.sms[statestore.ToKey(id)]
-	if exist {
-		return xerrors.Errorf("Begin: already tracking identifier `%v`", id)
-	}
-
-	exists, err := s.sts.Has(id)
+	producer, consumer, err := s.group.GetOrCreateProducerConsumer(id, []eventbus.EventType{internalEvent{s.group.SystemName}})
 	if err != nil {
-		return xerrors.Errorf("failed to check if state for %v exists: %w", id, err)
+		return err
 	}
-	if exists {
-		return xerrors.Errorf("Begin: cannot initiate a state for identifier `%v` that already exists", id)
-	}
-
-	sm, err = s.loadOrCreate(id, userState)
-	if err != nil {
-		return xerrors.Errorf("loadOrCreate state: %w", err)
-	}
-	s.sms[statestore.ToKey(id)] = sm
-	return nil
+	_, err = s.group.Create(id, userState, producer, consumer)
+	return err
 }
 
 // Send sends an event to machine identified by `id`.
@@ -83,85 +85,27 @@ func (s *StateGroup) Begin(id interface{}, userState interface{}) error {
 // If a state machine with the specified id doesn't exits, it's created, and it's
 // state is set to zero-value of stateType provided in group constructor
 func (s *StateGroup) Send(id interface{}, evt interface{}) (err error) {
-	s.lk.Lock()
-	defer s.lk.Unlock()
-
-	sm, exist := s.sms[statestore.ToKey(id)]
-	if !exist {
-		userState := reflect.New(s.stateType).Interface()
-		sm, err = s.loadOrCreate(id, userState)
-		if err != nil {
-			return xerrors.Errorf("loadOrCreate state: %w", err)
-		}
-		s.sms[statestore.ToKey(id)] = sm
-	}
-
-	return sm.send(Event{User: evt})
-}
-
-func (s *StateGroup) loadOrCreate(name interface{}, userState interface{}) (*StateMachine, error) {
-	s.initNotifier.Do(s.init)
-	exists, err := s.sts.Has(name)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to check if state for %v exists: %w", name, err)
-	}
-
-	if !exists {
-		if !reflect.TypeOf(userState).AssignableTo(reflect.PtrTo(s.stateType)) {
-			return nil, xerrors.Errorf("initialized item with incorrect type %s", reflect.TypeOf(userState).Name())
-		}
-
-		err = s.sts.Begin(name, userState)
-		if err != nil {
-			return nil, xerrors.Errorf("saving initial state: %w", err)
-		}
-	}
-
-	res := &StateMachine{
-		planner:  s.hnd.Plan,
-		eventsIn: make(chan Event),
-
-		name:      name,
-		st:        s.sts.Get(name),
-		stateType: s.stateType,
-
-		stageDone: make(chan struct{}),
-		closing:   make(chan struct{}),
-		closed:    make(chan struct{}),
-	}
-
-	go res.run()
-
-	return res, nil
+	sm, err := s.group.GetOrCreate(id, []eventbus.EventType{internalEvent{s.group.SystemName}})
+	return sm.PublishEvent(internalEvent{s.group.SystemName}, Event{User: evt})
 }
 
 // Stop stops all state machines in this group
 func (s *StateGroup) Stop(ctx context.Context) error {
-	s.lk.Lock()
-	defer s.lk.Unlock()
-
-	for _, sm := range s.sms {
-		if err := sm.stop(ctx); err != nil {
-			return err
-		}
-	}
-
-	close(s.closing)
-	return nil
+	return s.group.Stop(ctx)
 }
 
 // List outputs states of all state machines in this group
 // out: *[]StateT
 func (s *StateGroup) List(out interface{}) error {
-	return s.sts.List(out)
+	return s.group.Store.List(out)
 }
 
 // Get gets state for a single state machine
 func (s *StateGroup) Get(id interface{}) *statestore.StoredState {
-	return s.sts.Get(id)
+	return s.group.Store.Get(id)
 }
 
 // Has indicates whether there is data for the given state machine
 func (s *StateGroup) Has(id interface{}) (bool, error) {
-	return s.sts.Has(id)
+	return s.group.Store.Has(id)
 }

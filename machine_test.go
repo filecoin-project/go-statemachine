@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/filecoin-project/go-statemachine/testbus"
 	"github.com/ipfs/go-datastore"
 	logging "github.com/ipfs/go-log"
 	"gotest.tools/assert"
@@ -67,7 +68,7 @@ func TestBasic(t *testing.T) {
 
 		th := &testHandler{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
 		close(th.proceed)
-		smm := New(ds, th, TestState{})
+		smm := New("test", ds, &testbus.TestCollection{}, th, TestState{})
 
 		if err := smm.Send(uint64(2), &TestEvent{A: "start"}); err != nil {
 			t.Fatalf("%+v", err)
@@ -82,7 +83,7 @@ func TestPersist(t *testing.T) {
 		ds := datastore.NewMapDatastore()
 
 		th := &testHandler{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-		smm := New(ds, th, TestState{})
+		smm := New("test", ds, &testbus.TestCollection{}, th, TestState{})
 
 		if err := smm.Send(uint64(2), &TestEvent{A: "start"}); err != nil {
 			t.Fatalf("%+v", err)
@@ -93,7 +94,7 @@ func TestPersist(t *testing.T) {
 			return
 		}
 
-		smm = New(ds, th, TestState{})
+		smm = New("test", ds, &testbus.TestCollection{}, th, TestState{})
 		if err := smm.Send(uint64(2), &TestEvent{A: "restart"}); err != nil {
 			t.Fatalf("%+v", err)
 		}
@@ -110,7 +111,7 @@ func TestBegin(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 
 	th := &testHandler{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
-	smm := New(ds, th, TestState{})
+	smm := New("test", ds, &testbus.TestCollection{}, th, TestState{})
 
 	// should not work for an invalid starting value
 	err := smm.Begin(uint64(2), uint64(4))
@@ -134,7 +135,7 @@ func TestBegin(t *testing.T) {
 	smm.Stop(ctx)
 
 	// assert cannot initialize even if just stored twice
-	smm = New(ds, th, TestState{})
+	smm = New("test", ds, &testbus.TestCollection{}, th, TestState{})
 	err = smm.Begin(uint64(2), &TestState{A: 2})
 	assert.Error(t, err, "Begin: cannot initiate a state for identifier `2` that already exists")
 
@@ -153,7 +154,7 @@ func TestPartialHandling(t *testing.T) {
 		started:  make(chan struct{}),
 		midpoint: make(chan struct{}),
 	}
-	smm := New(ds, th, TestState{})
+	smm := New("test", ds, &testbus.TestCollection{}, th, TestState{})
 
 	checkState := func(state uint64) {
 		var testState TestState
@@ -278,7 +279,7 @@ func TestNoStateCallback(t *testing.T) {
 	ds := datastore.NewMapDatastore()
 
 	th := &testHandlerNoStateCB{t: t, proceed: make(chan struct{}), done: make(chan struct{})}
-	smm := New(ds, th, TestState{})
+	smm := New("test", ds, &testbus.TestCollection{}, th, TestState{})
 
 	if err := smm.Send(uint64(2), &TestEvent{A: "block"}); err != nil {
 		t.Fatalf("%+v", err)
@@ -426,7 +427,7 @@ func TestInit(t *testing.T) {
 
 		th := &testHandlerWithGoRoutine{t: t, event: make(chan struct{}), notifDone: make(chan struct{}), done: make(chan struct{}), proceed: make(chan struct{})}
 		close(th.proceed)
-		smm := New(ds, th, TestState{})
+		smm := New("test", ds, &testbus.TestCollection{}, th, TestState{})
 
 		if err := smm.Send(uint64(2), &TestEvent{A: "start"}); err != nil {
 			t.Fatalf("%+v", err)

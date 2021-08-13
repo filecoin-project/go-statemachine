@@ -1,10 +1,15 @@
 package statemachine
 
-import "context"
+import (
+	"context"
+
+	core "github.com/filecoin-project/go-statemachine/internal"
+)
 
 type Context struct {
-	ctx  context.Context
-	send func(evt interface{}) error
+	systemName string
+	ctx        context.Context
+	sm         *core.StateMachine
 }
 
 func (ctx *Context) Context() context.Context {
@@ -12,5 +17,5 @@ func (ctx *Context) Context() context.Context {
 }
 
 func (ctx *Context) Send(evt interface{}) error {
-	return ctx.send(evt)
+	return ctx.sm.PublishEvent(internalEvent{ctx.systemName}, Event{User: evt})
 }

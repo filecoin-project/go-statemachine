@@ -5,6 +5,7 @@ import (
 
 	"github.com/filecoin-project/go-statemachine"
 	"github.com/ipfs/go-datastore"
+	eventbus "github.com/protocol/hack-the-bus"
 	cbg "github.com/whyrusleeping/cbor-gen"
 	"golang.org/x/xerrors"
 )
@@ -19,13 +20,13 @@ type stateGroup struct {
 // based on the given parameters
 // ds: data store where state comes from
 // parameters: finite state machine parameters
-func New(ds datastore.Datastore, parameters Parameters) (Group, error) {
+func New(systemName string, ds datastore.Datastore, eventBusCollection eventbus.Collection, parameters Parameters) (Group, error) {
 	handler, err := NewFSMHandler(parameters)
 	if err != nil {
 		return nil, err
 	}
 	d := handler.(fsmHandler)
-	return &stateGroup{StateGroup: statemachine.New(ds, handler, parameters.StateType), d: d}, nil
+	return &stateGroup{StateGroup: statemachine.New(systemName, ds, eventBusCollection, handler, parameters.StateType), d: d}, nil
 }
 
 // Send sends the given event name and parameters to the state specified by id
