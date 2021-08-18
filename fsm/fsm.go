@@ -121,7 +121,7 @@ func (d fsmHandler) reachedFinalityState(user interface{}) bool {
 	return final
 }
 
-const maxExpectedEventProcessingTime = 50 * time.Millisecond
+const maxExpectedEventProcessingTime = 500 * time.Millisecond
 
 // Init will start up a goroutine which processes the notification queue
 // in order
