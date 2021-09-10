@@ -107,7 +107,7 @@ func (fsm *StateMachine) run() {
 			}
 
 			go func() {
-				defer log.Debugw("leaving critical zone and resetting atomic var to zero", "len(pending)", len(pendingEvents))
+				defer log.Debugw("leaving critical zone and resetting atomic var to zero")
 
 				if nextStep != nil {
 					res := reflect.ValueOf(nextStep).Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(ustate).Elem()})
