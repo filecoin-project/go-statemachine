@@ -29,7 +29,7 @@ type StateGroup struct {
 	closing      chan struct{}
 	initNotifier sync.Once
 
-	lk  sync.Mutex
+	lk  sync.RWMutex
 	sms map[datastore.Key]*StateMachine
 }
 
@@ -83,10 +83,17 @@ func (s *StateGroup) Begin(id interface{}, userState interface{}) error {
 // If a state machine with the specified id doesn't exits, it's created, and it's
 // state is set to zero-value of stateType provided in group constructor
 func (s *StateGroup) Send(id interface{}, evt interface{}) (err error) {
+	s.lk.RLock()
+	sm, exist := s.sms[statestore.ToKey(id)]
+	s.lk.RUnlock()
+
+	if exist {
+		return sm.send(Event{User: evt})
+	}
+
 	s.lk.Lock()
 	defer s.lk.Unlock()
-
-	sm, exist := s.sms[statestore.ToKey(id)]
+	sm, exist = s.sms[statestore.ToKey(id)]
 	if !exist {
 		userState := reflect.New(s.stateType).Interface()
 		sm, err = s.loadOrCreate(id, userState)
@@ -163,5 +170,11 @@ func (s *StateGroup) Get(id interface{}) *statestore.StoredState {
 
 // Has indicates whether there is data for the given state machine
 func (s *StateGroup) Has(id interface{}) (bool, error) {
+	s.lk.RLock()
+	_, exist := s.sms[statestore.ToKey(id)]
+	s.lk.RUnlock()
+	if exist {
+		return true, nil
+	}
 	return s.sts.Has(id)
 }
