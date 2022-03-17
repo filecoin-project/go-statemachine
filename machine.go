@@ -34,9 +34,8 @@ type StateMachine struct {
 	st        *statestore.StoredState
 	stateType reflect.Type
 
-	stageDone chan struct{}
-	closing   chan struct{}
-	closed    chan struct{}
+	closing chan struct{}
+	closed  chan struct{}
 
 	busy int32
 }
@@ -45,6 +44,7 @@ func (fsm *StateMachine) run() {
 	defer close(fsm.closed)
 
 	var pendingEvents []Event
+	stageDone := make(chan struct{}, 1)
 
 	for {
 		// NOTE: This requires at least one event to be sent to trigger a stage
@@ -54,7 +54,7 @@ func (fsm *StateMachine) run() {
 		case evt := <-fsm.eventsIn:
 			pendingEvents = append(pendingEvents, evt)
 			log.Debugw("appended new pending evt", "len(pending)", len(pendingEvents))
-		case <-fsm.stageDone:
+		case <-stageDone:
 			if len(pendingEvents) == 0 {
 				continue
 			}
@@ -119,7 +119,7 @@ func (fsm *StateMachine) run() {
 				}
 
 				atomic.StoreInt32(&fsm.busy, 0)
-				fsm.stageDone <- struct{}{}
+				stageDone <- struct{}{}
 			}()
 
 		}
