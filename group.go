@@ -125,9 +125,8 @@ func (s *StateGroup) loadOrCreate(name interface{}, userState interface{}) (*Sta
 		st:        s.sts.Get(name),
 		stateType: s.stateType,
 
-		stageDone: make(chan struct{}),
-		closing:   make(chan struct{}),
-		closed:    make(chan struct{}),
+		closing: make(chan struct{}),
+		closed:  make(chan struct{}),
 	}
 
 	go res.run()
