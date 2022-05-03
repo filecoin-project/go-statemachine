@@ -139,6 +139,15 @@ type Group interface {
 	Stop(ctx context.Context) error
 }
 
+// Options change how the state machine operates
+type Options struct {
+	// ConsumeAllEventsBeforeEntryFuncs causes the state machine to consume every waiting FSM event before
+	// the next StateEntryFunc is called. The normal operation is to only consume one event then call
+	// the StateEntryFunc. Sometimes, this can cause unexpected behavior if multiple FSM events are queued,
+	// causing multiple StateEntryFunc's to get called in unpredictable succession
+	ConsumeAllEventsBeforeEntryFuncs bool
+}
+
 // Parameters are the parameters that define a finite state machine
 type Parameters struct {
 	// required
@@ -171,4 +180,7 @@ type Parameters struct {
 	// FinalityStates are states in which the statemachine will shut down,
 	// stop calling handlers and stop processing events
 	FinalityStates []StateKey
+
+	// Options
+	Options Options
 }

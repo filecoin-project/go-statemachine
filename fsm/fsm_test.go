@@ -55,7 +55,6 @@ func handleA(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) er
 }
 
 func handleB(ctx fsm.Context, te *testEnvironment, ts statemachine.TestState) error {
-
 	assert.Equal(te.t, uint64(2), ts.A)
 	close(te.done)
 	return nil
@@ -397,6 +396,57 @@ func TestBasic(t *testing.T) {
 	}
 }
 
+func TestConsumeAllEvents(t *testing.T) {
+	testCases := map[string]bool{
+		"with ConsumeAllEventsBeforeEntryFuncs off": false,
+		"with ConsumeAllEventsBeforeEntryFuncs on":  true,
+	}
+
+	for testCase, consumeAllEventsBeforeEntryFuncs := range testCases {
+
+		t.Run(testCase, func(t *testing.T) {
+			ds := dss.MutexWrap(datastore.NewMapDatastore())
+
+			te := &testEnvironment{t: t, done: make(chan struct{}), proceed: make(chan struct{})}
+			smm, err := fsm.New(ds, fsm.Parameters{
+				Environment:     te,
+				StateType:       statemachine.TestState{},
+				StateKeyField:   "A",
+				Events:          events,
+				StateEntryFuncs: stateEntryFuncs,
+				FinalityStates:  []fsm.StateKey{uint64(3)},
+				Notifier:        nil,
+				Options: fsm.Options{
+					ConsumeAllEventsBeforeEntryFuncs: consumeAllEventsBeforeEntryFuncs,
+				},
+			})
+
+			require.NoError(t, err)
+
+			err = smm.Send(uint64(2), "start")
+			require.NoError(t, err)
+
+			err = smm.Send(uint64(2), "b", uint64(55))
+			require.NoError(t, err)
+
+			err = smm.Send(uint64(2), "finish")
+			require.NoError(t, err)
+
+			close(te.proceed)
+
+			if !consumeAllEventsBeforeEntryFuncs {
+				<-te.done
+			} else {
+				time.Sleep(100 * time.Millisecond)
+				select {
+				case <-te.done:
+					t.Fatalf("did not expect B handler to be called")
+				default:
+				}
+			}
+		})
+	}
+}
 func TestPersist(t *testing.T) {
 	for i := 0; i < 1000; i++ { // run a few times to expose any races
 		ds := dss.MutexWrap(datastore.NewMapDatastore())
@@ -518,54 +568,67 @@ func TestNotification(t *testing.T) {
 }
 
 func TestSerialNotification(t *testing.T) {
-	eventNames := []string{}
-
-	// Generate a slew of events that will occur in sequential order
-	for i := 0; i < 1000; i++ {
-		eventNames = append(eventNames, fmt.Sprintf("%04d", i))
+	testCases := map[string]bool{
+		"with ConsumeAllEventsBeforeEntryFuncs off": false,
+		"with ConsumeAllEventsBeforeEntryFuncs on":  true,
 	}
 
-	events := fsm.Events{}
-	for _, eventName := range eventNames {
-		events = append(events, fsm.Event(eventName).FromAny().ToNoChange())
+	for testCase, consumeAllEventsBeforeEntryFuncs := range testCases {
+
+		t.Run(testCase, func(t *testing.T) {
+			eventNames := []string{}
+
+			// Generate a slew of events that will occur in sequential order
+			for i := 0; i < 1000; i++ {
+				eventNames = append(eventNames, fmt.Sprintf("%04d", i))
+			}
+
+			events := fsm.Events{}
+			for _, eventName := range eventNames {
+				events = append(events, fsm.Event(eventName).FromAny().ToNoChange())
+			}
+
+			te := &testEnvironment{t: t}
+
+			var notifications []string
+
+			wg := sync.WaitGroup{}
+			handleNotifications := make(chan struct{})
+			wg.Add(len(events))
+
+			var notifier fsm.Notifier = func(eventName fsm.EventName, state fsm.StateType) {
+				<-handleNotifications
+				notifications = append(notifications, eventName.(string))
+				wg.Done()
+			}
+
+			ds := dss.MutexWrap(datastore.NewMapDatastore())
+			params := fsm.Parameters{
+				Environment:     te,
+				StateType:       statemachine.TestState{},
+				StateKeyField:   "A",
+				Events:          events,
+				StateEntryFuncs: fsm.StateEntryFuncs{},
+				Notifier:        notifier,
+				Options: fsm.Options{
+					ConsumeAllEventsBeforeEntryFuncs: consumeAllEventsBeforeEntryFuncs,
+				},
+			}
+			smm, err := fsm.New(ds, params)
+			require.NoError(t, err)
+
+			// send all the events in order
+			for _, eventName := range eventNames {
+				err = smm.Send(uint64(2), eventName)
+				require.NoError(t, err)
+			}
+			close(handleNotifications)
+			wg.Wait()
+
+			// Expect that notifications happened in the order that the events happened
+			require.Equal(t, eventNames, notifications)
+		})
 	}
-
-	te := &testEnvironment{t: t}
-
-	var notifications []string
-
-	wg := sync.WaitGroup{}
-	handleNotifications := make(chan struct{})
-	wg.Add(len(events))
-
-	var notifier fsm.Notifier = func(eventName fsm.EventName, state fsm.StateType) {
-		<-handleNotifications
-		notifications = append(notifications, eventName.(string))
-		wg.Done()
-	}
-
-	ds := dss.MutexWrap(datastore.NewMapDatastore())
-	params := fsm.Parameters{
-		Environment:     te,
-		StateType:       statemachine.TestState{},
-		StateKeyField:   "A",
-		Events:          events,
-		StateEntryFuncs: fsm.StateEntryFuncs{},
-		Notifier:        notifier,
-	}
-	smm, err := fsm.New(ds, params)
-	require.NoError(t, err)
-
-	// send all the events in order
-	for _, eventName := range eventNames {
-		err = smm.Send(uint64(2), eventName)
-		require.NoError(t, err)
-	}
-	close(handleNotifications)
-	wg.Wait()
-
-	// Expect that notifications happened in the order that the events happened
-	require.Equal(t, eventNames, notifications)
 }
 
 func TestNoChangeHandler(t *testing.T) {
