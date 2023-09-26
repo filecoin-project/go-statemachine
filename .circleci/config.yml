@@ -83,7 +83,8 @@ jobs:
   build-macos:
     description: build with Darwin
     macos:
-      xcode: "10.0.0"
+      xcode: "15.0.0"
+    resource_class: macos.x86.medium.gen2
     working_directory: ~/go/src/github.com/filecoin-project/go-storage-miner
     steps:
       - prepare:
