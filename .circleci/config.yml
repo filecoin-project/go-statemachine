@@ -104,8 +104,9 @@ jobs:
       - run:
           name: Install jq
           command: |
-            curl --location https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64 --output /usr/local/bin/jq
-            chmod +x /usr/local/bin/jq
+            curl --location https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
+            chmod +x jq-osx-amd64
+            sudo mv jq-osx-amd64 /usr/local/bin/jq
       - restore_cache:
           name: restore go mod and cargo cache
           key: v1-go-deps-{{ arch }}-{{ checksum "~/go/src/github.com/filecoin-project/go-storage-miner/go.sum" }}
