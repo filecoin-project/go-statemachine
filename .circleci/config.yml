@@ -1,5 +1,6 @@
 version: 2.1
 orbs:
+  golang: circleci/go@1.7.3
   go: gotest/tools@0.0.9
 
 executors:
@@ -90,11 +91,8 @@ jobs:
       - prepare:
           linux: false
           darwin: true
-      - run:
-          name: Install go
-          command: |
-            curl -O https://dl.google.com/go/go1.13.4.darwin-amd64.pkg && \
-            sudo installer -pkg go1.13.4.darwin-amd64.pkg -target /
+      - golang/install:
+          version: "1.13.4"
       - run:
           name: Install pkg-config
           command: HOMEBREW_NO_AUTO_UPDATE=1 brew install pkg-config
