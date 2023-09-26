@@ -104,7 +104,7 @@ jobs:
       - run:
           name: Install jq
           command: |
-            curl --location https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
+            curl --location https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64 --output jq-osx-amd64
             chmod +x jq-osx-amd64
             sudo mv jq-osx-amd64 /usr/local/bin/jq
       - restore_cache:
